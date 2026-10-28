@@ -101,9 +101,10 @@ jobs:
         run: |
           sha256sum */*
           diff -r linux-0 linux-1
-          # Every entry the same, in the same order; then the signed files themselves, unless
-          # they were signed with two throwaway keys.
-          diff <(unzip -v android-0/*.apk | tail -n +2) <(unzip -v android-1/*.apk | tail -n +2)
+          # Every entry the same, in the same order, apart from the signature; then the signed
+          # files themselves, unless they were signed with two throwaway keys.
+          entries() { unzip -v "$1" | grep -v -e '^Archive:' -e META-INF/ -e ' files$'; }
+          diff <(entries android-0/*.apk) <(entries android-1/*.apk)
           [ "$VERSION" = test ] || diff -r android-0 android-1
           mkdir release && cp linux-0/* android-0/* release/
           cd release && sha256sum hushphone-* > SHA256SUMS
