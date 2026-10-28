@@ -512,7 +512,7 @@ impl App {
                 Some((when, model::chat_item(v, last, unread, &who, now)))
             })
             .collect();
-        items.sort_by(|a, b| b.0.cmp(&a.0));
+        items.sort_by_key(|i| std::cmp::Reverse(i.0));
         sync(&self.chat_model, items.into_iter().map(|(_, i)| i).collect());
     }
 
