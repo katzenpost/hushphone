@@ -25,6 +25,7 @@ profile hushphone /usr/bin/hushphone {
   # kpclientd's socket, the display, the session bus and the sound server.
   unix,
   dbus bus=session,
+  owner /run/user/[0-9]*/bus rw,
   deny network inet,
   deny network inet6,
   deny network raw,
@@ -45,6 +46,9 @@ profile hushphone /usr/bin/hushphone {
   owner @{HOME}/.local/share/hushphone/** rwk,
   owner @{HOME}/.cache/hushphone/ rw,
   owner @{HOME}/.cache/hushphone/** rwk,
+  # Mesa's compiled shaders.
+  owner @{HOME}/.cache/mesa_shader_cache/ rw,
+  owner @{HOME}/.cache/mesa_shader_cache/** rwk,
 
   # Files the user attaches, and the documents the file chooser hands over.
   owner @{HOME}/** r,
