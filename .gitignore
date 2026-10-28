@@ -1,3 +1,10 @@
 /target
 /shots
 /dist
+/debian/hushphone/
+/debian/.debhelper/
+/debian/cargo-home/
+/debian/files
+/debian/*.substvars
+/debian/debhelper-build-stamp
+/debian/*.debhelper.log

@@ -1,0 +1,36 @@
+Source: hushphone
+Section: net
+Priority: optional
+Maintainer: Katzenpost <packages@katzenpost.network>
+Build-Depends: debhelper-compat (= 13),
+               libasound2-dev,
+               libfontconfig-dev,
+               pkg-config
+Standards-Version: 4.7.2
+Homepage: https://github.com/katzenpost/hushphone
+Rules-Requires-Root: no
+
+Package: hushphone
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libegl1,
+         libgl1,
+         libwayland-client0,
+         libwayland-cursor0,
+         libwayland-egl1,
+         libx11-6,
+         libx11-xcb1,
+         libxcursor1,
+         libxi6,
+         libxkbcommon-x11-0,
+         libxkbcommon0
+Recommends: katzenpost,
+            xdg-desktop-portal
+Description: group chat with push-to-talk voice over the Katzenpost mixnet
+ hushphone is a group chat client for the Katzenpost mix network, with
+ push-to-talk voice messages. Its groups are shared with katzenqt, jam and
+ frank_chat.
+ .
+ It does no networking of its own: it talks to a running Katzenpost client
+ daemon, kpclientd, over its socket.

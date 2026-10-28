@@ -36,6 +36,20 @@ cargo run --release -- --daemon @katzenpost
 
 Recording needs ALSA (`libasound2-dev` to build).
 
+### Debian package
+
+`make deb` builds `dist/hushphone_<version>_amd64.deb` in a Debian 13 build container, with
+podman. The package installs the app, its desktop entry and its icon:
+
+```sh
+make deb                      # or: make deb DISTRO=ubuntu-24.04
+sudo apt install ./dist/hushphone_*.deb
+```
+
+The package is reproducible. `make deb-ci`, run in the build container as CI does, builds it,
+installs and tests it, then builds it again in another directory and checks that both packages
+are the same.
+
 ## Android
 
 hushphone reaches kpclientd at `127.0.0.1:64331`, where

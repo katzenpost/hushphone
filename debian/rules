@@ -1,0 +1,31 @@
+#!/usr/bin/make -f
+
+export SOURCE_DATE_EPOCH ?= $(shell dpkg-parsechangelog -STimestamp)
+
+# Crates are fetched into the source tree, and every path is taken out of the binary, so that
+# the package is the same wherever it is built.
+export CARGO_HOME := $(CURDIR)/debian/cargo-home
+export CARGO_INCREMENTAL := 0
+export RUSTFLAGS := --remap-path-prefix=$(CURDIR)=/build/hushphone
+export CFLAGS := -ffile-prefix-map=$(CURDIR)=/build/hushphone
+
+%:
+	dh $@
+
+override_dh_auto_clean:
+	rm -rf debian/cargo-home
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_test:
+	:
+
+override_dh_auto_install:
+	install -D -m 0755 target/release/hushphone debian/hushphone/usr/bin/hushphone
+
+override_dh_dwz:
+	:
+
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym
