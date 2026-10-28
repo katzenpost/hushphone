@@ -472,30 +472,67 @@ component Composer inherits Rectangle {
     }
 }
 
+component Card inherits Rectangle {
+    border-radius: Theme.radius-lg;
+    background: Theme.surface;
+    border-width: 1px;
+    border-color: Theme.divider;
+}
+
+// The code is a direct child of the layout, so it is measured at the card's width; its background
+// follows its bounds.
+component VoucherCard inherits Card {
+    height: lay.preferred-height;
+    Rectangle {
+        x: code.x - Theme.s3;
+        y: code.y - Theme.s3;
+        width: code.width + 2 * Theme.s3;
+        height: code.height + 2 * Theme.s3;
+        background: Theme.raised;
+        border-radius: Theme.radius-sm;
+    }
+    lay := VerticalLayout {
+        padding: Theme.s5;
+        spacing: Theme.s3;
+        Text {
+            text: "Joining " + AppState.current-name;
+            color: Theme.text;
+            font-size: Theme.fs-title;
+            font-weight: 700;
+            overflow: elide;
+        }
+        Hint { text: "Give this voucher code to someone already in the group, over a channel you trust. When they add it, you join."; }
+        Rectangle { height: Theme.s2; }
+        code := Text {
+            text: AppState.code;
+            color: Theme.text;
+            font-family: "monospace";
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+            accessible-label: "voucher code: " + AppState.code;
+        }
+        Rectangle { height: Theme.s2; }
+        HorizontalLayout {
+            alignment: start;
+            Button {
+                text: "Copy code";
+                icon: @image-url("icons/copy.svg");
+                has-icon: true;
+                primary: true;
+                activated => { Actions.copy-code(); }
+            }
+        }
+    }
+}
+
 component JoiningPanel {
-    // Placed by hand at a known width, so its wrapped text is measured at that width. The code is
-    // a direct child of the layout for the same reason; its background follows its bounds.
-    card := Rectangle {
+    // Each card is placed by hand at a known width, so its wrapped text is measured at that width.
+    if AppState.minting: minting := Card {
         width: min(520px, root.width - 2 * Theme.s4);
-        height: lay.preferred-height;
+        height: mlay.preferred-height;
         x: (root.width - self.width) / 2;
         y: max(Theme.s4, (root.height - self.height) / 2);
-        border-radius: Theme.radius-lg;
-        background: Theme.surface;
-        border-width: 1px;
-        border-color: Theme.divider;
-
-        Rectangle {
-            x: code.x - Theme.s3;
-            y: code.y - Theme.s3;
-            width: code.width + 2 * Theme.s3;
-            height: code.height + 2 * Theme.s3;
-            visible: !AppState.minting;
-            background: Theme.raised;
-            border-radius: Theme.radius-sm;
-        }
-
-        lay := VerticalLayout {
+        mlay := VerticalLayout {
             padding: Theme.s5;
             spacing: Theme.s3;
             Text {
@@ -505,34 +542,17 @@ component JoiningPanel {
                 font-weight: 700;
                 overflow: elide;
             }
-            if AppState.minting: HorizontalLayout {
+            HorizontalLayout {
                 spacing: Theme.s3;
                 Spinner { indeterminate: true; width: 24px; height: 24px; }
                 Hint { text: "Minting a voucher over the mixnet. This can take a minute."; vertical-alignment: center; }
             }
-            if !AppState.minting: Hint { text: "Give this voucher code to someone already in the group, over a channel you trust. When they add it, you join."; }
-            Rectangle { height: AppState.minting ? 0 : Theme.s2; }
-            code := Text {
-                text: AppState.minting ? "" : AppState.code;
-                visible: !AppState.minting;
-                color: Theme.text;
-                font-family: "monospace";
-                font-size: Theme.fs-small;
-                wrap: word-wrap;
-                accessible-label: "voucher code: " + AppState.code;
-            }
-            Rectangle { height: AppState.minting ? 0 : Theme.s2; }
-            if !AppState.minting: HorizontalLayout {
-                alignment: start;
-                Button {
-                    text: "Copy code";
-                    icon: @image-url("icons/copy.svg");
-                    has-icon: true;
-                    primary: true;
-                    activated => { Actions.copy-code(); }
-                }
-            }
         }
+    }
+    if !AppState.minting: VoucherCard {
+        width: min(520px, root.width - 2 * Theme.s4);
+        x: (root.width - self.width) / 2;
+        y: max(Theme.s4, (root.height - self.height) / 2);
     }
 }
 
@@ -608,7 +628,20 @@ component Conversation inherits Rectangle {
 
         if AppState.current-joined: messages := ListView {
             vertical-stretch: 1;
-            for line in AppState.lines: VerticalLayout {
+            // Follow new lines while the reader is at the bottom; leave them be if they scrolled up.
+            private property <bool> at-bottom: true;
+            private property <string> chat: AppState.current;
+            private property <length> bottom: min(0, self.visible-height - self.content-height);
+            changed chat => {
+                self.at-bottom = true;
+                self.content-y = self.bottom;
+            }
+            changed content-y => { self.at-bottom = self.content-y <= self.bottom + 48px; }
+            changed bottom => {
+                if (self.at-bottom) { self.content-y = self.bottom; }
+            }
+            for line[i] in AppState.lines: VerticalLayout {
+                padding-bottom: i == AppState.lines.length - 1 ? Theme.s3 : 0;
                 if line.kind == LineKind.notice: NoticeRow { text: line.text; }
                 if line.kind != LineKind.notice: MessageRow { line: line; }
             }
