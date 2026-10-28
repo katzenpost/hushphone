@@ -24,13 +24,14 @@ static APP: OnceLock<AndroidApp> = OnceLock::new();
 
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
+    crate::harden::process();
     let _ = APP.set(app.clone());
     // Keep every window out of screenshots, screen recording and the recent-apps thumbnails.
     // Only test builds, made to take screenshots of, leave this out.
     if !cfg!(feature = "test-screenshots") {
         app.set_window_flags(WindowManagerFlags::SECURE, WindowManagerFlags::empty());
     }
-    let data = app.internal_data_path().unwrap_or_else(|| "/data/local/tmp/hushphone".into());
+    let data = private_dir(&app);
     slint::android::init(app).expect("Slint on Android");
     // The thin client dials a unix socket in the app's private directory, where each connection
     // is joined to one kpclientd-android hands out: no other app can reach it, and the app
@@ -40,7 +41,8 @@ fn android_main(app: AndroidApp) {
     let setup = crate::Setup {
         cache_dir: data.join("cache"),
         data_dir: data,
-        source: Source::Daemon(String::new()),
+        // Always the relay: it is part of the app, not a setting, and its place has moved before.
+        source: Source::Daemon(relay.to_string_lossy().into_owned()),
         default_daemon: relay.to_string_lossy().into_owned(),
         name: None,
         old_defaults: vec![OLD_DAEMON.into()],
@@ -286,4 +288,21 @@ fn start_relay(path: PathBuf) {
             });
         })
         .expect("relay thread");
+}
+
+/// The app's directory that Android leaves out of cloud backups and device-to-device transfers,
+/// `no_backup`, beside its files directory: the keys of every group live there. What an older
+/// version kept in the files directory moves over.
+fn private_dir(app: &AndroidApp) -> PathBuf {
+    let files = app.internal_data_path().unwrap_or_else(|| "/data/local/tmp/hushphone/files".into());
+    let dir = files.parent().map(|p| p.join("no_backup")).unwrap_or_else(|| files.join("no_backup"));
+    let _ = std::fs::create_dir_all(&dir);
+    for name in ["state", "settings.toml", "cache"] {
+        let (old, new) = (files.join(name), dir.join(name));
+        if old.exists() && !new.exists() {
+            let _ = std::fs::rename(&old, &new);
+        }
+    }
+    let _ = std::fs::remove_file(files.join("kpclientd.sock"));
+    dir
 }

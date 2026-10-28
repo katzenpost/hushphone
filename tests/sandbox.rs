@@ -59,3 +59,29 @@ fn tcp_to_the_daemon() {
     probe_common();
     assert!(TcpListener::bind("127.0.0.1:0").is_ok(), "no TCP socket");
 }
+
+#[test]
+fn the_process_keeps_to_itself() {
+    if !child() {
+        return in_child("the_process_keeps_to_itself");
+    }
+    hushphone::harden::process();
+    // SAFETY: plain queries of the process's own state.
+    unsafe {
+        assert_eq!(libc::prctl(libc::PR_GET_DUMPABLE, 0, 0, 0, 0), 0, "the process can be dumped");
+        let mut core = libc::rlimit { rlim_cur: 1, rlim_max: 1 };
+        libc::getrlimit(libc::RLIMIT_CORE, &mut core);
+        assert_eq!(core.rlim_cur, 0, "core dumps are on");
+    }
+    let f = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("harden-{}", std::process::id()));
+    std::fs::write(&f, b"secret").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let mode = std::fs::metadata(&f).unwrap().permissions().mode() & 0o777;
+    std::fs::remove_file(&f).unwrap();
+    assert_eq!(mode, 0o600, "a new file is readable by others");
+    // Another process of the same user cannot look into this one: /proc/<pid>/environ takes the
+    // same permission as reading its memory or tracing it.
+    let peek = format!("head -c1 /proc/{}/environ >/dev/null 2>&1; echo $?", std::process::id());
+    let o = Command::new("sh").args(["-c", &peek]).output().unwrap();
+    assert_ne!(String::from_utf8_lossy(&o.stdout).trim(), "0", "another process looked into this one");
+}
