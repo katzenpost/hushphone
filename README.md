@@ -101,6 +101,32 @@ The tests cover the following:
   waits, and push-to-talk works.
 - A whole session driven through the window.
 
+## Releases
+
+A `v*` tag runs the tests, then builds the Linux binary and the Android APK twice each, on
+different machines and in different directories. The release is published only if both builds
+are byte for byte the same. Release builds are reproducible:
+
+- `rust-toolchain.toml` pins Rust.
+- The Linux build runs in an Ubuntu 22.04 image pinned by digest, with packages from one Ubuntu
+  snapshot.
+- The Android build pins the NDK, build tools and cargo-apk.
+- Paths and dates are taken out of the output.
+
+To check a release against its source:
+
+```sh
+git checkout v0.1.0
+img=ubuntu:22.04@sha256:8a2321a92b438238f93b4346fff61bc4259c99fdd4d9b52ee86f153fee0c344f
+podman run --rm -v $PWD:/src -w /src $img \
+    sh -c 'scripts/linux-env.sh && . /root/.cargo/env && scripts/build-release.sh linux'
+sha256sum dist/*.tar.gz
+```
+
+The APK is signed, so a rebuild without the key differs only in its signature. Compare the
+entries with `unzip -v`. To rebuild it, use NDK 30.0.16248370, build tools 36.0.0 and cargo-apk
+0.10.0, then run `ANDROID_NDK_ROOT=… scripts/build-release.sh android`.
+
 ## License
 
 AGPL-3.0-only; see [LICENSE](LICENSE).

@@ -10,6 +10,7 @@ export CFLAGS="-ffile-prefix-map=$cargo_home=/cargo -ffile-prefix-map=$here=/hus
 export CARGO_INCREMENTAL=0
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}
 version=${VERSION:-$(git describe --tags --always)}
+rustup toolchain install
 mkdir -p dist
 case ${1:-} in
 linux)

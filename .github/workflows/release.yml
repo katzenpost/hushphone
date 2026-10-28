@@ -1,20 +1,27 @@
 name: Release
 
-# A tag v* runs the tests, then builds the Linux binary and the Android APK and publishes them as
-# a GitHub release. Pull requests that change this file build both without publishing.
+# A tag v* runs the tests, then builds the Linux binary and the Android APK twice each, on
+# different runners in different directories, checks that both builds are byte for byte the
+# same, and publishes them as a GitHub release. Pull requests that change the release build do
+# all of this except publishing.
 #
 # The APK is signed with the keystore in the ANDROID_KEYSTORE secret (base64 of a .jks holding
-# one key) and its password in ANDROID_KEYSTORE_PASSWORD. Releases keep one key, so that each
-# APK installs over the last; a tag without these secrets fails.
+# one key, whose password is the store's) and its password in ANDROID_KEYSTORE_PASSWORD.
+# Releases keep one key, so that each APK installs over the last; a tag without these secrets
+# fails.
 
 on:
   push:
     tags: ["v*"]
   pull_request:
-    paths: [".github/workflows/release.yml"]
+    paths:
+      - .github/workflows/release.yml
+      - scripts/**
+      - rust-toolchain.toml
 
 env:
   VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
+  NDK: "30.0.16248370"
 
 jobs:
   test:
@@ -22,36 +29,38 @@ jobs:
 
   linux:
     needs: test
-    # The oldest supported runner, so the binary runs on older glibc.
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        dir: [a, b/elsewhere]
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04@sha256:8a2321a92b438238f93b4346fff61bc4259c99fdd4d9b52ee86f153fee0c344f
     steps:
-      - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev libfontconfig1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --locked --release
-      - name: Package
+      - name: Tools
         run: |
-          name=hushphone-$VERSION-linux-x86_64
-          mkdir $name
-          cp target/release/hushphone README.md LICENSE $name/
-          tar czf $name.tar.gz $name
+          apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@v5
+        with:
+          path: ${{ matrix.dir }}
+      - run: ${{ matrix.dir }}/scripts/linux-env.sh
+      - run: . $HOME/.cargo/env && ${{ matrix.dir }}/scripts/build-release.sh linux
       - uses: actions/upload-artifact@v5
         with:
-          name: linux
-          path: hushphone-*.tar.gz
+          name: linux-${{ strategy.job-index }}
+          path: ${{ matrix.dir }}/dist/*
 
   android:
     needs: test
+    strategy:
+      matrix:
+        dir: [a, b/elsewhere]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
-      - uses: Swatinem/rust-cache@v2
+          path: ${{ matrix.dir }}
       - run: cargo install cargo-apk --locked --version 0.10.0
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"
+        working-directory: ${{ runner.temp }}
+      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK"
       - name: Keystore
         env:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
@@ -65,34 +74,53 @@ jobs:
             echo "::error::a release needs the ANDROID_KEYSTORE and ANDROID_KEYSTORE_PASSWORD secrets"
             exit 1
           else
+            # A throwaway key, so the two test builds differ only in their signatures.
             keytool -genkeypair -keystore $RUNNER_TEMP/release.jks -storepass throwaway -keypass throwaway \
-              -alias hushphone -keyalg RSA -keysize 4096 -validity 1 -dname CN=hushphone-test
+              -alias hushphone -keyalg RSA -keysize 2048 -validity 1 -dname CN=hushphone-test
             echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=throwaway" >> $GITHUB_ENV
           fi
           echo "CARGO_APK_RELEASE_KEYSTORE=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
-      - run: ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME cargo apk build --release --lib
+      - run: ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK ${{ matrix.dir }}/scripts/build-release.sh android
       - name: Check
         run: |
-          $ANDROID_HOME/build-tools/36.0.0/apksigner verify target/release/apk/hushphone.apk
-          unzip -l target/release/apk/hushphone.apk | grep -E 'lib/(arm64-v8a|x86_64)/libhushphone.so'
-          mv target/release/apk/hushphone.apk hushphone-$VERSION.apk
+          $ANDROID_HOME/build-tools/36.0.0/apksigner verify ${{ matrix.dir }}/dist/hushphone-$VERSION.apk
+          unzip -l ${{ matrix.dir }}/dist/hushphone-$VERSION.apk | grep -E 'lib/(arm64-v8a|x86_64)/libhushphone.so'
       - uses: actions/upload-artifact@v5
         with:
-          name: android
-          path: hushphone-*.apk
+          name: android-${{ strategy.job-index }}
+          path: ${{ matrix.dir }}/dist/*
+
+  compare:
+    needs: [linux, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v5
+      - name: Both builds are the same
+        shell: bash
+        run: |
+          sha256sum */*
+          diff -r linux-0 linux-1
+          # Every entry the same, in the same order; then the signed files themselves, unless
+          # they were signed with two throwaway keys.
+          diff <(unzip -v android-0/*.apk | tail -n +2) <(unzip -v android-1/*.apk | tail -n +2)
+          [ "$VERSION" = test ] || diff -r android-0 android-1
+          mkdir release && cp linux-0/* android-0/* release/
+          cd release && sha256sum hushphone-* > SHA256SUMS
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release
+          path: release/*
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [linux, android]
+    needs: compare
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v5
         with:
-          merge-multiple: true
-      - name: Checksums
-        run: sha256sum hushphone-* > SHA256SUMS
+          name: release
       - uses: softprops/action-gh-release@v2
         with:
           files: |
