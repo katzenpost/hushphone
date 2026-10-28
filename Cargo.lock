@@ -2221,10 +2221,7 @@ dependencies = [
  "jni 0.21.1",
  "katzenpost_thin_client",
  "libc",
- "pigeonhole-katzenqt1-client",
- "pigeonhole-katzenqt1-engine",
- "pigeonhole-transport",
- "pigeonhole-transport-thinclient",
+ "pigeonhole_protocols",
  "proptest",
  "rfd",
  "rustic_audio",
@@ -3311,6 +3308,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "memsec"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c797b9d6bb23aab2fc369c65f871be49214f5c759af65bde26ffaaa2b646b492"
+dependencies = [
+ "getrandom 0.2.17",
+ "libc",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4161,80 +4169,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 
 [[package]]
-name = "pigeonhole-katzenqt1-client"
+name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=35f54fd9bec17ae8b3aba8897995170c537271fb#35f54fd9bec17ae8b3aba8897995170c537271fb"
 dependencies = [
  "base64 0.22.1",
- "hex",
- "pigeonhole-katzenqt1-engine",
- "pigeonhole-katzenqt1-member",
- "pigeonhole-katzenqt1-wire",
- "pigeonhole-transport",
- "rand 0.8.8",
- "redb",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pigeonhole-katzenqt1-engine"
-version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
-dependencies = [
- "base64 0.22.1",
- "indexmap",
- "pigeonhole-katzenqt1-member",
- "pigeonhole-katzenqt1-wire",
- "pigeonhole-transport",
-]
-
-[[package]]
-name = "pigeonhole-katzenqt1-member"
-version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
-dependencies = [
  "blake2",
  "ed25519-dalek",
  "hex",
  "indexmap",
- "pigeonhole-katzenqt1-wire",
- "rand 0.8.8",
- "serde_json",
- "sha3",
-]
-
-[[package]]
-name = "pigeonhole-katzenqt1-wire"
-version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
-dependencies = [
- "sha2",
-]
-
-[[package]]
-name = "pigeonhole-transport"
-version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
-dependencies = [
- "base64 0.22.1",
- "ed25519-dalek",
- "pigeonhole-katzenqt1-member",
- "rand 0.8.8",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "pigeonhole-transport-thinclient"
-version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
-dependencies = [
  "katzenpost_thin_client",
- "pigeonhole-transport",
+ "memsec",
  "rand 0.8.8",
+ "redb",
  "serde_cbor",
+ "serde_json",
+ "sha2",
+ "sha3",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
