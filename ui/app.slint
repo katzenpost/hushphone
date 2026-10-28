@@ -641,7 +641,8 @@ component Conversation inherits Rectangle {
                 self.at-bottom = true;
                 self.content-y = self.bottom;
             }
-            changed content-y => { self.at-bottom = self.content-y <= self.bottom + 48px; }
+            // Only the reader's own scrolling decides whether to follow, never our own.
+            scrolled => { self.at-bottom = self.content-y <= self.bottom + 48px; }
             changed bottom => {
                 if (self.at-bottom) { self.content-y = self.bottom; }
             }
