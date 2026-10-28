@@ -2,8 +2,8 @@ name: Release
 
 # A tag v* runs the tests, then builds the Linux binary and the Android APK twice each, on
 # different runners in different directories, checks that both builds are byte for byte the
-# same, and publishes them as a GitHub release. Pull requests that change the release build do
-# all of this except publishing.
+# same, and publishes them as a GitHub release. Run by hand from the Actions tab, it does all of
+# this except publishing.
 #
 # The APK is signed with the keystore in the ANDROID_KEYSTORE secret (base64 of a .jks holding
 # one key, whose password is the store's) and its password in ANDROID_KEYSTORE_PASSWORD.
@@ -13,11 +13,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  pull_request:
-    paths:
-      - .github/workflows/release.yml
-      - scripts/**
-      - rust-toolchain.toml
+  workflow_dispatch:
 
 env:
   VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
