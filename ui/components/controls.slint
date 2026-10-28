@@ -90,7 +90,12 @@ export component IconButton {
         }
     }
 
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
     fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
         enabled: root.enabled;
         focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost => { root.keyboard-focus = false; }
@@ -178,7 +183,12 @@ export component Button {
         }
     }
 
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
     fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
         enabled: root.enabled;
         focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
         focus-lost => { root.keyboard-focus = false; }

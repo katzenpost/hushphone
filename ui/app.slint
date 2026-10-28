@@ -297,7 +297,12 @@ component PttButton {
             }
         }
     }
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
     fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
         enabled: AppState.current-joined;
         key-pressed(e) => {
             if (e.text == " " && !e.repeat) {

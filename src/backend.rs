@@ -2,7 +2,7 @@
 //! the UI's commands and tells it what changed. Nothing here touches the screen, the clipboard,
 //! files outside the state directory or the microphone.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -145,9 +145,17 @@ async fn lines_from(c: &Client, id: &str, first: usize) -> (Vec<LineView>, Vec<(
     (lines, paths)
 }
 
-async fn send_chat(c: &Client, id: &str, first: usize, dropped: Vec<usize>, tell: &impl Fn(Update)) {
+/// Our own lines not yet acknowledged, by group: an acknowledgement changes a line without the
+/// client's event naming it, so updates are read from the oldest of these on.
+type Unacked = HashMap<ChatId, BTreeSet<usize>>;
+
+async fn send_chat(c: &Client, id: &str, first: usize, dropped: Vec<usize>, unacked: &mut Unacked, tell: &impl Fn(Update)) {
     let Ok(view) = c.chat(id).await else { return };
+    let waiting = unacked.entry(id.to_string()).or_default();
+    let first = waiting.first().map_or(first, |&u| u.min(first));
     let (lines, paths) = lines_from(c, id, first).await;
+    waiting.retain(|&u| u < first);
+    waiting.extend(lines.iter().filter(|l| l.mine && !l.acked).map(|l| l.line.id));
     tell(Update::Chat { view, from: first, lines, dropped, paths });
 }
 
@@ -163,8 +171,9 @@ async fn serve<B: Backend>(
         Err(e) => return tell(Update::Stopped(e.to_string())),
     };
     let mut events = c.subscribe();
+    let mut unacked = Unacked::new();
     for ch in c.chats().await.unwrap_or_default() {
-        send_chat(&c, &ch.id, 0, Vec::new(), tell).await;
+        send_chat(&c, &ch.id, 0, Vec::new(), &mut unacked, tell).await;
     }
     let mut link = None;
     let mut tick = tokio::time::interval(Duration::from_secs(2));
@@ -172,7 +181,7 @@ async fn serve<B: Backend>(
         tokio::select! {
             cmd = rx.recv() => {
                 let Some(cmd) = cmd else { break };
-                if let Err(e) = carry_out(&c, cmd, tell).await {
+                if let Err(e) = carry_out(&c, cmd, &mut unacked, tell).await {
                     tell(Update::Failed(sentence(&e)));
                 }
             }
@@ -202,7 +211,7 @@ async fn serve<B: Backend>(
                         tell(Update::Removed(id));
                     } else {
                         let first = lines.first().copied().unwrap_or(usize::MAX);
-                        send_chat(&c, &id, first, dropped, tell).await;
+                        send_chat(&c, &id, first, dropped, &mut unacked, tell).await;
                     }
                 }
             }
@@ -222,16 +231,16 @@ async fn serve<B: Backend>(
     c.close().await;
 }
 
-async fn carry_out(c: &Client, cmd: Cmd, tell: &impl Fn(Update)) -> Result<(), ClientError> {
+async fn carry_out(c: &Client, cmd: Cmd, unacked: &mut Unacked, tell: &impl Fn(Update)) -> Result<(), ClientError> {
     match cmd {
         Cmd::Create(name, ticket) => {
             let id = c.create(&name).await?;
-            send_chat(c, &id, 0, Vec::new(), tell).await;
+            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
             tell(Update::Made(id, ticket));
         }
         Cmd::Join(name, ticket) => {
             let id = c.join(&name).await?;
-            send_chat(c, &id, 0, Vec::new(), tell).await;
+            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
             tell(Update::Made(id, ticket));
         }
         Cmd::Invite(id, code) => c.invite(&id, code.trim()).await?,
@@ -242,11 +251,11 @@ async fn carry_out(c: &Client, cmd: Cmd, tell: &impl Fn(Update)) -> Result<(), C
         Cmd::Leave(id) => c.leave(&id).await?,
         Cmd::Clear(id) => {
             c.clear(&id).await?;
-            send_chat(c, &id, 0, Vec::new(), tell).await;
+            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
         }
         Cmd::Rename(id, to) => {
             c.rename(&id, &to).await?;
-            send_chat(c, &id, usize::MAX, Vec::new(), tell).await;
+            send_chat(c, &id, usize::MAX, Vec::new(), unacked, tell).await;
         }
     }
     Ok(())
