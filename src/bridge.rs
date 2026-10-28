@@ -97,6 +97,8 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     let chat_model = Rc::new(VecModel::default());
     let line_model = Rc::new(VecModel::default());
     let member_model = Rc::new(VecModel::default());
+    let start = std::time::Instant::now();
+    ui.global::<crate::Clock>().on_now(move || start.elapsed().as_millis() as i64);
     let st = ui.global::<AppState>();
     st.set_chats(ModelRc::from(chat_model.clone()));
     st.set_lines(ModelRc::from(line_model.clone()));

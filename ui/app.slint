@@ -1,11 +1,11 @@
 import { ListView, LineEdit, ComboBox, Spinner, Palette } from "std-widgets.slint";
 import { Theme, ThemePreference } from "theme.slint";
-import { AppState, Actions, ChatItem, LineItem, MemberItem, Connection, LineKind, Delivery } from "globals.slint";
+import { AppState, Actions, Clock, ChatItem, LineItem, MemberItem, Connection, LineKind, Delivery } from "globals.slint";
 import { Stable, Icon, IconButton, Button, Avatar, Badge } from "components/controls.slint";
 import { MessageRow, NoticeRow } from "components/messages.slint";
 import { Dialog, Hint, FieldLabel } from "components/dialog.slint";
 
-export { AppState, Actions, Theme, ThemePreference, Connection, LineKind, Delivery, ChatItem, LineItem, MemberItem }
+export { AppState, Actions, Clock, Theme, ThemePreference, Connection, LineKind, Delivery, ChatItem, LineItem, MemberItem }
 
 component ConnectionDot {
     width: 8px;
@@ -25,7 +25,7 @@ component ChatRow {
     accessible-role: list-item;
     accessible-label: chat.name + (chat.unread > 0 ? ", " + chat.unread + " unread" : "");
     accessible-item-selected: selected;
-    accessible-action-default => { if (stable.armed) { root.activated(); } }
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
 
     stable := Stable { at: root.absolute-position; settle: 300ms; }
 
@@ -85,7 +85,7 @@ component ChatRow {
     }
     touch := TouchArea {
         mouse-cursor: pointer;
-        clicked => { if (stable.armed) { root.activated(); } }
+        clicked => { if (stable.ready()) { root.activated(); } }
     }
 }
 
@@ -279,7 +279,7 @@ component PttButton {
         mouse-cursor: pointer;
         pointer-event(e) => {
             if (e.button != PointerEventButton.left) { return; }
-            if (e.kind == PointerEventKind.down && stable.armed && !root.held) {
+            if (e.kind == PointerEventKind.down && stable.ready() && !root.held) {
                 root.held = true;
                 Actions.ptt-start();
             } else if (e.kind == PointerEventKind.up && root.held) {
@@ -306,7 +306,7 @@ component PttButton {
         enabled: AppState.current-joined;
         key-pressed(e) => {
             if (e.text == " " && !e.repeat) {
-                if (stable.armed && !root.held) {
+                if (stable.ready() && !root.held) {
                     root.held = true;
                     Actions.ptt-start();
                 }
@@ -460,12 +460,12 @@ component Composer inherits Rectangle {
                 background: send-touch.has-hover ? Theme.accent-hover : Theme.accent;
                 accessible-role: button;
                 accessible-label: "Send to " + AppState.current-name;
-                accessible-action-default => { if (send-stable.armed) { root.send(); } }
+                accessible-action-default => { if (send-stable.ready()) { root.send(); } }
                 send-stable := Stable { at: parent.absolute-position; }
                 Icon { icon: @image-url("icons/send.svg"); tint: Theme.on-accent; size: 20px; }
                 send-touch := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => { if (send-stable.armed) { root.send(); } }
+                    clicked => { if (send-stable.ready()) { root.send(); } }
                 }
             }
         }
@@ -519,7 +519,7 @@ component JoiningPanel {
                 font-family: "monospace";
                 font-size: Theme.fs-small;
                 wrap: word-wrap;
-                accessible-label: "voucher code";
+                accessible-label: "voucher code: " + AppState.code;
             }
             Rectangle { height: AppState.minting ? 0 : Theme.s2; }
             if !AppState.minting: HorizontalLayout {
@@ -937,9 +937,10 @@ export component AppWindow inherits Window {
                 join-group => { root.overlay = Overlay.join; }
             }
 
-            // Notices from the host never take focus or open a dialog: a strip at the bottom.
+            // Notices from the host never take focus or open a dialog: a strip under the header.
             if AppState.notice != "": Rectangle {
-                y: parent.height - self.height - Theme.s4;
+                // At the top, under the header, so it never covers the composer.
+                y: 64px + Theme.s2;
                 x: (parent.width - self.width) / 2;
                 width: min(560px, parent.width - 2 * Theme.s4);
                 height: toast.preferred-height;

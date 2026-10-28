@@ -102,3 +102,10 @@ export global Actions {
     callback choose-name(string);
     callback dismiss-notice();
 }
+
+// The time the app has been running, from the host. Controls compare it when they are used, so a
+// click is judged by the real time it came, not by when the screen was last drawn. Unset, it stays
+// at zero and no guarded control ever accepts input.
+export global Clock {
+    callback now() -> duration;
+}

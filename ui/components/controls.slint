@@ -1,20 +1,35 @@
 import { Theme } from "../theme.slint";
+import { Clock } from "../globals.slint";
 
 // Accepts activation only once its control has been visible, enabled and unmoved for `settle`,
-// so content arriving and shifting the layout cannot steer a click onto it.
+// so content arriving and shifting the layout cannot steer a click onto it. It reads the host's
+// clock when asked, so the answer never depends on when a timer fires or a frame is drawn.
 export component Stable {
     in property <bool> enabled: true;
     in property <duration> settle: 500ms;
     in property <Point> at;
-    out property <bool> armed: false;
+    private property <duration> since;
+    private property <Point> seen;
+    private property <bool> was-enabled;
 
-    changed at => { root.armed = false; }
-    changed enabled => { root.armed = false; }
+    init => { root.restart(); }
+    changed at => { root.restart(); }
+    changed enabled => { root.restart(); }
 
-    Timer {
-        interval: root.settle;
-        running: !root.armed && root.enabled;
-        triggered => { root.armed = true; }
+    function restart() {
+        root.since = Clock.now();
+        root.seen = root.at;
+        root.was-enabled = root.enabled;
+    }
+
+    // Also checks the position itself, so a move not yet reported by the handlers above still
+    // counts as a move.
+    public function ready() -> bool {
+        if (root.at != root.seen || root.enabled != root.was-enabled) {
+            root.restart();
+            return false;
+        }
+        return root.enabled && Clock.now() - root.since >= root.settle;
     }
 }
 
@@ -54,7 +69,7 @@ export component IconButton {
     accessible-role: button;
     accessible-label: label;
     accessible-enabled: enabled;
-    accessible-action-default => { if (stable.armed) { root.activated(); } }
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
     forward-focus: fs;
 
     stable := Stable {
@@ -86,7 +101,7 @@ export component IconButton {
         enabled: root.enabled;
         mouse-cursor: root.enabled ? pointer : default;
         clicked => {
-            if (stable.armed) { root.activated(); }
+            if (stable.ready()) { root.activated(); }
         }
     }
 
@@ -101,7 +116,7 @@ export component IconButton {
         focus-lost => { root.keyboard-focus = false; }
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
-                if (stable.armed) { root.activated(); }
+                if (stable.ready()) { root.activated(); }
                 return accept;
             }
             reject
@@ -125,7 +140,7 @@ export component Button {
     accessible-role: button;
     accessible-label: text;
     accessible-enabled: enabled;
-    accessible-action-default => { if (stable.armed) { root.activated(); } }
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
     forward-focus: fs;
 
     stable := Stable {
@@ -179,7 +194,7 @@ export component Button {
         enabled: root.enabled;
         mouse-cursor: root.enabled ? pointer : default;
         clicked => {
-            if (stable.armed) { root.activated(); }
+            if (stable.ready()) { root.activated(); }
         }
     }
 
@@ -194,7 +209,7 @@ export component Button {
         focus-lost => { root.keyboard-focus = false; }
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
-                if (stable.armed) { root.activated(); }
+                if (stable.ready()) { root.activated(); }
                 return accept;
             }
             reject
