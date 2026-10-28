@@ -2,7 +2,8 @@ name: Release
 
 # A tag v* runs the tests, then builds the Linux binary and the Android APK twice each, on
 # different runners in different directories, checks that both builds are byte for byte the
-# same, and publishes them as a GitHub release. A pull request that changes the release build,
+# same, builds the Debian packages twice each the same way, and publishes them all as a GitHub
+# release. A pull request that changes the release build,
 # or a run by hand from the Actions tab, does all of this except publishing.
 #
 # The APK is signed with the keystore in the ANDROID_KEYSTORE secret (base64 of a .jks holding
@@ -98,8 +99,33 @@ jobs:
           name: android-${{ strategy.job-index }}
           path: ${{ matrix.dir }}/dist/*
 
+  deb:
+    needs: test
+    strategy:
+      matrix:
+        distro: [debian-13, ubuntu-24.04]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: The changelog names this version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: head -1 debian/changelog | grep -F "(${VERSION#v})"
+      - run: make deb-image DISTRO=${{ matrix.distro }} PODMAN=docker
+      - name: Build, install, test and rebuild
+        run: |
+          docker run --rm -v "$PWD":/build -w /build \
+            "$(make -s deb-image-ref DISTRO=${{ matrix.distro }})" make deb-ci
+      - name: Name it for the release
+        run: |
+          mkdir out
+          cp dist/hushphone_*_amd64.deb out/hushphone-$VERSION-${{ matrix.distro }}-amd64.deb
+      - uses: actions/upload-artifact@v5
+        with:
+          name: deb-${{ matrix.distro }}
+          path: out/*
+
   compare:
-    needs: [linux, android]
+    needs: [linux, android, deb]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v5
@@ -115,7 +141,7 @@ jobs:
             diff <(entries $apk) <(entries android-1/${apk#*/})
           done
           [ "$VERSION" = test ] || diff -r android-0 android-1
-          mkdir release && cp linux-0/* android-0/* release/
+          mkdir release && cp linux-0/* android-0/* deb-*/* release/
           cd release && sha256sum hushphone-* > SHA256SUMS
       - uses: actions/upload-artifact@v5
         with:

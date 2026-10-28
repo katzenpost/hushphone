@@ -141,8 +141,9 @@ The tests cover the following:
 ## Releases
 
 A `v*` tag runs the tests, then builds the Linux binary and the Android APKs (`arm64-v8a` for
-phones, `x86_64` for emulators) twice each, on different machines and in different directories.
-The release is published only if both builds are byte for byte the same. Release builds are reproducible:
+phones, `x86_64` for emulators) twice each, on different machines and in different directories,
+and the Debian packages for Debian 13 and Ubuntu 24.04 twice each. The release is published only
+if both builds of each are byte for byte the same. Release builds are reproducible:
 
 - `rust-toolchain.toml` pins Rust.
 - The Linux build runs in an Ubuntu 22.04 image pinned by digest, with packages from one Ubuntu
