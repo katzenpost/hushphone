@@ -1,0 +1,131 @@
+name: Release
+
+# A tag v* runs the tests, then builds the Linux binary and the Android APK twice each, on
+# different runners in different directories, checks that both builds are byte for byte the
+# same, and publishes them as a GitHub release. A pull request that changes the release build,
+# or a run by hand from the Actions tab, does all of this except publishing.
+#
+# The APK is signed with the keystore in the ANDROID_KEYSTORE secret (base64 of a .jks holding
+# one key, whose password is the store's) and its password in ANDROID_KEYSTORE_PASSWORD.
+# Releases keep one key, so that each APK installs over the last; a tag without these secrets
+# fails.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/**
+      - rust-toolchain.toml
+  workflow_dispatch:
+
+env:
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
+  NDK: "30.0.16248370"
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  linux:
+    needs: test
+    strategy:
+      matrix:
+        dir: [a, b/elsewhere]
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04@sha256:8a2321a92b438238f93b4346fff61bc4259c99fdd4d9b52ee86f153fee0c344f
+    steps:
+      - name: Tools
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends ca-certificates git
+      - uses: actions/checkout@v5
+        with:
+          path: ${{ matrix.dir }}
+      - run: ${{ matrix.dir }}/scripts/linux-env.sh
+      - run: . $HOME/.cargo/env && ${{ matrix.dir }}/scripts/build-release.sh linux
+      - uses: actions/upload-artifact@v5
+        with:
+          name: linux-${{ strategy.job-index }}
+          path: ${{ matrix.dir }}/dist/*
+
+  android:
+    needs: test
+    strategy:
+      matrix:
+        dir: [a, b/elsewhere]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: ${{ matrix.dir }}
+      - run: cargo install cargo-apk --locked --version 0.10.0
+        working-directory: ${{ runner.temp }}
+      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK"
+      - name: Keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > $RUNNER_TEMP/release.jks
+            echo "::add-mask::$PASSWORD"
+            echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+          elif [ "$VERSION" != test ]; then
+            echo "::error::a release needs the ANDROID_KEYSTORE and ANDROID_KEYSTORE_PASSWORD secrets"
+            exit 1
+          else
+            # A throwaway key, so the two test builds differ only in their signatures.
+            keytool -genkeypair -keystore $RUNNER_TEMP/release.jks -storepass throwaway -keypass throwaway \
+              -alias hushphone -keyalg RSA -keysize 2048 -validity 1 -dname CN=hushphone-test
+            echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=throwaway" >> $GITHUB_ENV
+          fi
+          echo "CARGO_APK_RELEASE_KEYSTORE=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
+      - run: ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK ${{ matrix.dir }}/scripts/build-release.sh android
+      - name: Check
+        run: |
+          $ANDROID_HOME/build-tools/36.0.0/apksigner verify ${{ matrix.dir }}/dist/hushphone-$VERSION.apk
+          unzip -l ${{ matrix.dir }}/dist/hushphone-$VERSION.apk | grep -E 'lib/(arm64-v8a|x86_64)/libhushphone.so'
+      - uses: actions/upload-artifact@v5
+        with:
+          name: android-${{ strategy.job-index }}
+          path: ${{ matrix.dir }}/dist/*
+
+  compare:
+    needs: [linux, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v5
+      - name: Both builds are the same
+        shell: bash
+        run: |
+          sha256sum */*
+          diff -r linux-0 linux-1
+          # Every entry the same, in the same order, apart from the signature; then the signed
+          # files themselves, unless they were signed with two throwaway keys.
+          entries() { unzip -v "$1" | grep -v -e '^Archive:' -e META-INF/ -e ' files$'; }
+          diff <(entries android-0/*.apk) <(entries android-1/*.apk)
+          [ "$VERSION" = test ] || diff -r android-0 android-1
+          mkdir release && cp linux-0/* android-0/* release/
+          cd release && sha256sum hushphone-* > SHA256SUMS
+      - uses: actions/upload-artifact@v5
+        with:
+          name: release
+          path: release/*
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: compare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            hushphone-*
+            SHA256SUMS
+          generate_release_notes: true
