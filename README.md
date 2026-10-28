@@ -103,14 +103,15 @@ The tests cover the following:
 
 ## Releases
 
-A `v*` tag runs the tests, then builds the Linux binary and the Android APK twice each, on
-different machines and in different directories. The release is published only if both builds
-are byte for byte the same. Release builds are reproducible:
+A `v*` tag runs the tests, then builds the Linux binary and the Android APKs (`arm64-v8a` for
+phones, `x86_64` for emulators) twice each, on different machines and in different directories.
+The release is published only if both builds are byte for byte the same. Release builds are reproducible:
 
 - `rust-toolchain.toml` pins Rust.
 - The Linux build runs in an Ubuntu 22.04 image pinned by digest, with packages from one Ubuntu
   snapshot.
-- The Android build pins the NDK, build tools and cargo-apk.
+- The Android build pins the NDK, build tools, platform, JDK and cargo-apk, and makes one APK
+  per ABI, since cargo-apk orders the libraries of a multi-ABI APK at random.
 - Paths and dates are taken out of the output.
 
 To check a release against its source:
@@ -123,9 +124,9 @@ podman run --rm -v $PWD:/src -w /src $img \
 sha256sum dist/*.tar.gz
 ```
 
-The APK is signed, so a rebuild without the key differs only in its signature. Compare the
-entries with `unzip -v`. To rebuild it, use NDK 30.0.16248370, build tools 36.0.0 and cargo-apk
-0.10.0, then run `ANDROID_NDK_ROOT=… scripts/build-release.sh android`.
+The APKs are signed, so a rebuild without the key differs only in its signature. Compare their
+entries with `unzip -v`. To rebuild them, use NDK 30.0.16248370, build tools 36.0.0, JDK 21 and
+cargo-apk 0.10.0, then run `ANDROID_NDK_ROOT=… scripts/build-release.sh android`.
 
 ## License
 
