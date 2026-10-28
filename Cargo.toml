@@ -75,3 +75,8 @@ label = "hushphone"
 [package.metadata.android.application.activity]
 config_changes = "orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
 launch_mode = "singleTop"
+
+# One codegen unit: with several, LLVM names symbols after the build directory, and the
+# release would not be reproducible.
+[profile.release]
+codegen-units = 1
