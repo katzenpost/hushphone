@@ -62,7 +62,6 @@ const DENIED: &[libc::c_long] = &[
     libc::SYS_finit_module,
     libc::SYS_delete_module,
     libc::SYS_kexec_load,
-    libc::SYS_kexec_file_load,
     libc::SYS_reboot,
     libc::SYS_swapon,
     libc::SYS_swapoff,
