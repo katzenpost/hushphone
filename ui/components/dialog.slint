@@ -1,0 +1,81 @@
+import { Theme } from "../theme.slint";
+import { Icon, IconButton } from "controls.slint";
+
+// A modal panel over a dimmed window. The backdrop takes every press, so nothing beneath the
+// dialog can be reached while it is open; the app opens dialogs only from the user's own input.
+export component Dialog {
+    in property <string> title;
+    in property <length> panel-width: 420px;
+    callback dismissed();
+    width: 100%;
+    height: 100%;
+
+    // Swallow pointer input to whatever lies beneath, and close on a press outside the panel.
+    TouchArea {
+        clicked => { root.dismissed(); }
+    }
+    Rectangle {
+        background: #000000a0;
+    }
+
+    FocusScope {
+        key-pressed(e) => {
+            if (e.text == Key.Escape) {
+                root.dismissed();
+                return accept;
+            }
+            reject
+        }
+
+        panel := Rectangle {
+            width: min(root.panel-width, root.width - 2 * Theme.s4);
+            height: min(lay.preferred-height, root.height - 2 * Theme.s4);
+            border-radius: Theme.radius-lg;
+            background: Theme.surface;
+            border-width: 1px;
+            border-color: Theme.divider;
+            drop-shadow-blur: 24px;
+            drop-shadow-color: #00000059;
+            clip: true;
+
+            // Presses inside the panel stop here.
+            TouchArea { }
+
+            lay := VerticalLayout {
+                padding: Theme.s5;
+                spacing: Theme.s4;
+                HorizontalLayout {
+                    spacing: Theme.s2;
+                    Text {
+                        text: root.title;
+                        color: Theme.text;
+                        font-size: Theme.fs-title;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        overflow: elide;
+                        horizontal-stretch: 1;
+                    }
+                    IconButton {
+                        size: 32px;
+                        icon: @image-url("../icons/close.svg");
+                        label: "Close";
+                        activated => { root.dismissed(); }
+                    }
+                }
+                @children
+            }
+        }
+    }
+}
+
+export component Hint inherits Text {
+    color: Theme.text-muted;
+    font-size: Theme.fs-small;
+    wrap: word-wrap;
+}
+
+export component FieldLabel inherits Text {
+    color: Theme.text;
+    font-size: Theme.fs-small;
+    font-weight: 600;
+}

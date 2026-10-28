@@ -1,0 +1,299 @@
+import { Theme } from "../theme.slint";
+import { LineItem, LineKind, Delivery, Actions } from "../globals.slint";
+import { Icon, IconButton, Avatar } from "controls.slint";
+
+export component DeliveryMark {
+    in property <Delivery> delivery;
+    in property <string> read-by;
+    in property <color> tint;
+    width: delivery == Delivery.none ? 0px : 16px;
+    height: 14px;
+    accessible-role: text;
+    accessible-label: delivery == Delivery.queued ? "queued"
+        : delivery == Delivery.written ? "written to the replicas"
+        : delivery == Delivery.read ? "read by " + read-by : "";
+    if delivery == Delivery.queued: Icon { icon: @image-url("../icons/clock.svg"); size: 12px; tint: root.tint; }
+    if delivery == Delivery.written: Icon { icon: @image-url("../icons/check.svg"); size: 14px; tint: root.tint; }
+    if delivery == Delivery.read: Icon { icon: @image-url("../icons/check-double.svg"); size: 14px; tint: root.tint; }
+}
+
+component VoicePill {
+    in property <LineItem> line;
+    in property <color> ink;
+    in property <color> meta;
+    min-width: 220px;
+    preferred-width: 260px;
+    height: 44px;
+
+    HorizontalLayout {
+        spacing: Theme.s2;
+        alignment: stretch;
+        IconButton {
+            y: (parent.height - self.height) / 2;
+            size: 36px;
+            icon: root.line.playing ? @image-url("../icons/stop.svg") : @image-url("../icons/play.svg");
+            label: root.line.playing ? "Stop voice message" : "Play voice message";
+            tint: root.ink;
+            tint-active: root.ink;
+            activated => { Actions.toggle-voice(root.line.id); }
+        }
+        VerticalLayout {
+            alignment: center;
+            spacing: Theme.s1;
+            horizontal-stretch: 1;
+            // Progress: a track drawn by the app, filled as the clip plays.
+            Rectangle {
+                height: 4px;
+                border-radius: 2px;
+                background: root.meta.with-alpha(0.35);
+                Rectangle {
+                    x: 0;
+                    width: parent.width * clamp(root.line.progress, 0, 1);
+                    border-radius: 2px;
+                    background: root.ink;
+                    animate width { duration: Theme.settle; }
+                }
+            }
+            Text {
+                text: root.line.duration;
+                color: root.meta;
+                font-size: Theme.fs-small;
+            }
+        }
+    }
+}
+
+component FileCard {
+    in property <LineItem> line;
+    in property <color> ink;
+    in property <color> meta;
+    in property <color> well;
+    min-width: 220px;
+    preferred-width: 280px;
+
+    VerticalLayout {
+        spacing: Theme.s2;
+        HorizontalLayout {
+            spacing: Theme.s3;
+            Rectangle {
+                width: 40px;
+                height: 40px;
+                border-radius: Theme.radius-sm;
+                background: root.well;
+                Icon { icon: @image-url("../icons/file.svg"); tint: root.ink; }
+            }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                // The full name, extension included, elided by the app when it is too long.
+                Text {
+                    text: root.line.file-name;
+                    color: root.ink;
+                    font-size: Theme.fs-body;
+                    font-weight: 600;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+                Text {
+                    text: root.line.file-type + " · " + root.line.file-size;
+                    color: root.meta;
+                    font-size: Theme.fs-small;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+            }
+        }
+        if !root.line.mine: HorizontalLayout {
+            spacing: Theme.s1;
+            alignment: end;
+            IconButton {
+                size: 32px;
+                icon: @image-url("../icons/download.svg");
+                label: "Save " + root.line.file-name;
+                tint: root.ink;
+                tint-active: root.ink;
+                activated => { Actions.save-file(root.line.id); }
+            }
+            IconButton {
+                size: 32px;
+                icon: @image-url("../icons/external.svg");
+                label: "Open " + root.line.file-name + " with another app";
+                tint: root.ink;
+                tint-active: root.ink;
+                activated => { Actions.open-file(root.line.id); }
+            }
+        }
+    }
+}
+
+// A notice from the app itself, in a frame no message can draw.
+export component NoticeRow {
+    in property <string> text;
+    HorizontalLayout {
+        alignment: center;
+        padding-left: Theme.s4;
+        padding-right: Theme.s4;
+        padding-top: Theme.s2;
+        padding-bottom: Theme.s2;
+        Rectangle {
+            max-width: 480px;
+            border-radius: Theme.radius-lg;
+            background: Theme.notice-bg;
+            border-width: 1px;
+            border-color: Theme.notice-border;
+            HorizontalLayout {
+                padding-left: Theme.s3;
+                padding-right: Theme.s3;
+                padding-top: Theme.s1;
+                padding-bottom: Theme.s1;
+                spacing: Theme.s2;
+                Icon {
+                    y: (parent.height - self.height) / 2;
+                    icon: @image-url("../icons/hush.svg");
+                    size: 14px;
+                    tint: Theme.text-muted;
+                }
+                Text {
+                    text: root.text;
+                    color: Theme.text-muted;
+                    font-size: Theme.fs-small;
+                    wrap: word-wrap;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+export component MessageRow {
+    in property <LineItem> line;
+    private property <color> ink: line.mine ? Theme.mine-text : Theme.text;
+    private property <color> meta: line.mine ? Theme.mine-meta : Theme.text-faint;
+
+    accessible-role: list-item;
+    accessible-label: (line.mine ? "you" : line.from) + ": " + (line.kind == LineKind.voice ? "voice message " + line.duration : line.kind == LineKind.file ? "file " + line.file-name : line.text);
+
+    HorizontalLayout {
+        padding-left: Theme.s4;
+        padding-right: Theme.s4;
+        padding-top: root.line.first ? Theme.s3 : 2px;
+        spacing: Theme.s2;
+        alignment: root.line.mine ? end : start;
+
+        if !root.line.mine: Rectangle {
+            width: Theme.avatar;
+            height: Theme.avatar;
+            y: 0;
+            if root.line.first: Avatar {
+                initial: root.line.initial;
+                tint: root.line.tint;
+            }
+        }
+
+        VerticalLayout {
+            spacing: 2px;
+            max-width: 560px;
+
+            // The sender column is the app's: the name is drawn here, outside the bubble.
+            if root.line.first && !root.line.mine: HorizontalLayout {
+                spacing: 0;
+                padding-left: Theme.s1;
+                alignment: start;
+                // A name the member gave themself is shown as ~name, as jam and frank_chat do. The
+                // mark is its own element, so a right-to-left name cannot carry it to the far side.
+                if root.line.unverified: Text {
+                    text: "~";
+                    color: Theme.tints[mod(root.line.tint, Theme.tints.length)];
+                    font-size: Theme.fs-small;
+                    font-weight: 700;
+                    accessible-role: none;
+                }
+                Text {
+                    text: root.line.from;
+                    color: Theme.tints[mod(root.line.tint, Theme.tints.length)];
+                    font-size: Theme.fs-small;
+                    font-weight: 700;
+                    overflow: elide;
+                    wrap: no-wrap;
+                    max-width: 260px;
+                    accessible-label: root.line.unverified ? root.line.from + ", a name they gave themself" : root.line.from;
+                }
+                if root.line.fingerprint != "": Text {
+                    text: " " + root.line.fingerprint;
+                    color: Theme.text-faint;
+                    font-size: Theme.fs-small;
+                    font-family: "monospace";
+                    accessible-label: "key " + root.line.fingerprint;
+                }
+            }
+
+            bubble := Rectangle {
+                background: root.line.mine ? Theme.mine : Theme.theirs;
+                border-radius: Theme.radius-lg;
+                border-width: root.line.mine || Theme.dark ? 0px : 1px;
+                border-color: Theme.divider;
+                drop-shadow-blur: Theme.dark ? 0px : 2px;
+                drop-shadow-color: #00000014;
+                drop-shadow-offset-y: 1px;
+                // Content stays inside its bubble.
+                clip: true;
+
+                VerticalLayout {
+                    padding-left: Theme.s3;
+                    padding-right: Theme.s3;
+                    padding-top: Theme.s2;
+                    padding-bottom: 6px;
+                    spacing: Theme.s1;
+
+                    if root.line.kind == LineKind.text: Text {
+                        text: root.line.text;
+                        color: root.ink;
+                        font-size: Theme.fs-body;
+                        wrap: word-wrap;
+                    }
+                    if root.line.kind == LineKind.voice: VoicePill {
+                        line: root.line;
+                        ink: root.ink;
+                        meta: root.meta;
+                    }
+                    if root.line.kind == LineKind.file: FileCard {
+                        line: root.line;
+                        ink: root.ink;
+                        meta: root.meta;
+                        well: root.line.mine ? #ffffff26 : Theme.raised;
+                    }
+                    if root.line.collapsed: Text {
+                        text: "Show the whole message";
+                        color: root.line.mine ? Theme.mine-text : Theme.accent;
+                        font-size: Theme.fs-small;
+                        font-weight: 600;
+                        accessible-role: button;
+                        accessible-label: self.text;
+                        accessible-action-default => { Actions.expand(root.line.id); }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { Actions.expand(root.line.id); }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: Theme.s1;
+                        Text {
+                            text: root.line.time;
+                            color: root.meta;
+                            font-size: 0.72rem;
+                            vertical-alignment: center;
+                        }
+                        if root.line.mine: DeliveryMark {
+                            y: (parent.height - self.height) / 2;
+                            delivery: root.line.delivery;
+                            read-by: root.line.read-by;
+                            tint: root.line.delivery == Delivery.read ? #9ff2e4 : root.meta;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
