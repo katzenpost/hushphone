@@ -558,6 +558,7 @@ impl App {
         st.set_current_members(v.members.len() as i32);
         st.set_code(group_code(&v.code).into());
         st.set_minting(v.minting);
+        st.set_joining_note(if v.joined { String::new() } else { model::joining_note(&c.lines) }.into());
         st.set_adding(v.adding);
         sync(&self.line_model, items);
         sync(&self.member_model, model::member_items(v, &who));

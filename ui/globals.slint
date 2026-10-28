@@ -68,6 +68,8 @@ export global AppState {
     // characters for reading; copying takes the code itself from the host.
     in property <string> code;
     in property <bool> minting;
+    // The group's latest notice while joining, such as a step that failed.
+    in property <string> joining-note;
     in property <bool> adding;
     in property <bool> recording;
     in property <string> record-time;
