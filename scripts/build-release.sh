@@ -24,6 +24,8 @@ linux)
     rm -rf "dist/$name"
     ;;
 android)
+    # Slint compiles a Java helper with whichever build tools and platform it finds; pin them.
+    export ANDROID_BUILD_TOOLS_VERSION=36.0.0 ANDROID_PLATFORM=36
     cargo apk build --release --lib
     cp target/release/apk/hushphone.apk "dist/hushphone-$version.apk"
     ;;
