@@ -1,3 +1,12 @@
+hushphone (0.1.1) unstable; urgency=medium
+
+  * Join through katzenqt voucher replies without rosters, and retry voucher reads that fail.
+  * Reopen the client when it stops; cancel a pending join.
+  * A seccomp filter in the binary and an AppArmor profile: no IP sockets, no programs.
+  * On Android, reach kpclientd through kpclientd-android's connect, with no network.
+
+ -- Katzenpost <packages@katzenpost.network>  Wed, 28 Oct 2026 21:42:26 +0000
+
 hushphone (0.1.0) unstable; urgency=medium
 
   * Package hushphone.
