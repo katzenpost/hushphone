@@ -13,6 +13,13 @@ send them: a file of type `audio/opus` named by its SHA-256.
 hushphone does no networking of its own. It needs the Katzenpost client daemon, `kpclientd`,
 running beside it.
 
+<p>
+  <img src="docs/desktop.png" alt="hushphone on the Linux desktop: a group with a voice clip, messages from a jam user and read receipts" width="640">
+  <img src="docs/android.png" alt="hushphone on Android, in the same group" width="210">
+</p>
+
+The same group on the desktop and on Android, over the namenlos mixnet. jules is using jam.
+
 ## Linux
 
 ```sh
@@ -92,3 +99,7 @@ The tests cover the following:
 - The window on mocked time: controls ignore early clicks and clicks after moving, a confirmation
   waits, and push-to-talk works.
 - A whole session driven through the window.
+
+## License
+
+AGPL-3.0-only; see [LICENSE](LICENSE).
