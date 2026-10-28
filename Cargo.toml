@@ -49,6 +49,7 @@ ashpd = { version = "0.13", default-features = false, features = ["tokio", "open
 
 [target.'cfg(target_os = "android")'.dependencies]
 slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }
+tokio = { version = "1", features = ["net", "io-util", "rt"] }
 jni = "0.21"
 
 [build-dependencies]
@@ -69,10 +70,12 @@ min_sdk_version = 28
 target_sdk_version = 36
 
 [[package.metadata.android.uses_permission]]
-name = "android.permission.INTERNET"
-
-[[package.metadata.android.uses_permission]]
 name = "android.permission.RECORD_AUDIO"
+
+# kpclientd-android's connect provider, the only way this app reaches the mixnet.
+[[package.metadata.android.queries.provider]]
+authorities = "org.hoi_polloi.kpdaemon.connect"
+name = "org.hoi_polloi.kpdaemon.ConnectProvider"
 
 [package.metadata.android.application]
 label = "hushphone"

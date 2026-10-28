@@ -52,6 +52,7 @@ fn make_a_group_and_talk() {
             source: Source::Memory(Default::default()),
             default_daemon: String::new(),
             name: Some("alice".into()),
+            old_defaults: Vec::new(),
         },
     );
     ui.show().unwrap();
