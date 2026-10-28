@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Local, TimeZone};
-use pigeonhole_katzenqt1_client::{ChatView, LineView};
-use pigeonhole_katzenqt1_engine::{Notice, NoticeKind, Status, plain};
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
+use pigeonhole_protocols::protocols::katzenqt1::engine::{Notice, NoticeKind, Status, plain};
 
 use crate::settings::Settings;
 use crate::text;
@@ -237,8 +237,8 @@ pub fn member_items(view: &ChatView, who: &HashMap<Vec<u8>, Who>) -> Vec<MemberI
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pigeonhole_katzenqt1_client::MemberView;
-    use pigeonhole_katzenqt1_engine::{Attachment, Line};
+    use pigeonhole_protocols::protocols::katzenqt1::client::MemberView;
+    use pigeonhole_protocols::protocols::katzenqt1::engine::{Attachment, Line};
 
     fn view() -> ChatView {
         ChatView {

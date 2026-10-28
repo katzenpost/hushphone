@@ -10,8 +10,8 @@ use hushphone::model::{self, Files};
 use hushphone::settings::Settings;
 use hushphone::voice;
 use hushphone::{Delivery, LineKind};
-use pigeonhole_katzenqt1_client::{ChatView, LineView};
-use pigeonhole_transport::sim::World;
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
+use pigeonhole_protocols::transport::sim::World;
 use tokio::sync::mpsc::UnboundedSender;
 
 struct Peer {

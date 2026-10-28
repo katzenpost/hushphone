@@ -6,12 +6,12 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use pigeonhole_katzenqt1_client::{ChatView, Client, ClientError, Config, LineView};
-use pigeonhole_katzenqt1_engine::{Attachment, ChatId};
-use pigeonhole_transport::Backend;
-use pigeonhole_transport::remote::Remote;
-use pigeonhole_transport::sim::World;
-use pigeonhole_transport_thinclient::ThinClientBackend;
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, LineView};
+use pigeonhole_protocols::protocols::katzenqt1::engine::{Attachment, ChatId};
+use pigeonhole_protocols::transport::Backend;
+use pigeonhole_protocols::transport::remote::Remote;
+use pigeonhole_protocols::transport::sim::World;
+use pigeonhole_protocols::transport::thinclient::ThinClientBackend;
 use futures_util::FutureExt;
 use tokio::sync::mpsc;
 
@@ -222,7 +222,7 @@ async fn serve<B: Backend>(
                 }
                 // Gather the burst: one update per group, from its oldest changed line.
                 let mut changed: std::collections::BTreeMap<ChatId, (BTreeSet<usize>, Vec<usize>, bool)> = Default::default();
-                let mut note = |e: pigeonhole_katzenqt1_client::Event| {
+                let mut note = |e: pigeonhole_protocols::protocols::katzenqt1::client::Event| {
                     let ent = changed.entry(e.chat).or_default();
                     ent.0.extend(e.lines);
                     ent.1.extend(e.dropped);

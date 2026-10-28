@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
-use pigeonhole_katzenqt1_client::{ChatView, LineView};
-use pigeonhole_katzenqt1_engine::ChatId;
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
+use pigeonhole_protocols::protocols::katzenqt1::engine::ChatId;
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::mpsc::UnboundedSender;
 
