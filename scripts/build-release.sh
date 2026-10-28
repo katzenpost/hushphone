@@ -24,8 +24,13 @@ linux)
     rm -rf "dist/$name"
     ;;
 android)
-    cargo apk build --release --lib
-    cp target/release/apk/hushphone.apk "dist/hushphone-$version.apk"
+    # Slint compiles a Java helper with whichever build tools and platform it finds; pin them.
+    export ANDROID_BUILD_TOOLS_VERSION=36.0.0 ANDROID_PLATFORM=36
+    # One APK per ABI: cargo-apk adds the libraries of a multi-ABI APK in random order.
+    for abi in arm64-v8a:aarch64-linux-android x86_64:x86_64-linux-android; do
+        cargo apk build --release --lib --target "${abi#*:}"
+        cp target/release/apk/hushphone.apk "dist/hushphone-$version-${abi%%:*}.apk"
+    done
     ;;
 *)
     echo "usage: $0 linux|android" >&2
