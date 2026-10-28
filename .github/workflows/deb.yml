@@ -1,0 +1,39 @@
+name: Debian packages
+
+# Builds the package in the build image for each distro, installs and tests it, and checks that a
+# second build in another directory is the same.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - .github/workflows/deb.yml
+      - debian/**
+      - packaging/**
+      - Makefile
+      - Cargo.toml
+      - Cargo.lock
+      - rust-toolchain.toml
+
+permissions:
+  contents: read
+
+jobs:
+  deb:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [debian-13, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v5
+      - run: make deb-image DISTRO=${{ matrix.distro }} PODMAN=docker
+      - name: Build, install, test and rebuild
+        run: |
+          docker run --rm -v "$PWD":/build -w /build \
+            "$(make -s deb-image-ref DISTRO=${{ matrix.distro }})" make deb-ci
+      - uses: actions/upload-artifact@v5
+        with:
+          name: deb-${{ matrix.distro }}
+          path: dist/*.deb

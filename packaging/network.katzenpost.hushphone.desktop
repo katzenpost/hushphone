@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=hushphone
+Comment=Group chat with push-to-talk voice over the Katzenpost mixnet
+Exec=hushphone
+Icon=network.katzenpost.hushphone
+Terminal=false
+Categories=Network;Chat;InstantMessaging;

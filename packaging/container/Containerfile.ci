@@ -1,0 +1,18 @@
+ARG BASE=docker.io/debian:13
+FROM ${BASE}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		build-essential ca-certificates curl debhelper dpkg-dev git \
+		libasound2-dev libfontconfig-dev make pkg-config \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Rust from rustup, at the version rust-toolchain.toml pins.
+ENV PATH=/root/.cargo/bin:$PATH
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
+COPY rust-toolchain.toml /tmp/toolchain/
+RUN cd /tmp/toolchain && rustup toolchain install && rm -rf /tmp/toolchain
+
+WORKDIR /build
