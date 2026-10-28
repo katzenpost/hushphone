@@ -1,0 +1,111 @@
+export enum Connection { connecting, online, offline, unreachable }
+
+export enum LineKind { text, notice, file, voice }
+
+// queued: not yet written; written: on the replicas; read: a member acknowledged it.
+export enum Delivery { none, queued, written, read }
+
+export struct ChatItem {
+    id: string,
+    name: string,
+    initial: string,
+    preview: string,
+    time: string,
+    unread: int,
+    joining: bool,
+    members: int,
+    tint: int,
+}
+
+export struct LineItem {
+    id: int,
+    kind: LineKind,
+    mine: bool,
+    from: string,
+    initial: string,
+    // The sender's name is their own claim, not one we gave them.
+    unverified: bool,
+    fingerprint: string,
+    tint: int,
+    text: string,
+    time: string,
+    delivery: Delivery,
+    read-by: string,
+    file-name: string,
+    file-size: string,
+    file-type: string,
+    duration: string,
+    playing: bool,
+    progress: float,
+    // First of a run of lines from the same sender: shows the name and avatar.
+    first: bool,
+    collapsed: bool,
+}
+
+export struct MemberItem {
+    key: string,
+    fingerprint: string,
+    name: string,
+    petname: string,
+    initial: string,
+    me: bool,
+    tint: int,
+}
+
+// What the host pushes into the UI.
+export global AppState {
+    in property <[ChatItem]> chats;
+    in property <[LineItem]> lines;
+    in property <[MemberItem]> members;
+    in property <Connection> connection: Connection.connecting;
+    in property <string> daemon;
+    in property <string> my-name;
+    in-out property <string> current;
+    in property <string> current-name;
+    in property <bool> current-joined;
+    in property <int> current-members;
+    // The voucher code to hand a member, while joining the current group, in groups of eight
+    // characters for reading; copying takes the code itself from the host.
+    in property <string> code;
+    in property <bool> minting;
+    in property <bool> adding;
+    in property <bool> recording;
+    in property <string> record-time;
+    in property <string> notice;
+    in property <bool> notice-error;
+}
+
+// What the UI asks of the host.
+export global Actions {
+    callback select-chat(string);
+    callback send-text(string);
+    callback create-group(string);
+    callback join-group(string);
+    callback invite(string);
+    callback attach-file();
+    callback ptt-start();
+    callback ptt-stop();
+    callback ptt-cancel();
+    callback toggle-voice(int);
+    callback save-file(int);
+    callback open-file(int);
+    callback expand(int);
+    callback copy-code();
+    callback paste-code() -> string;
+    callback leave();
+    callback clear();
+    callback rename(string);
+    callback scan();
+    callback remove-member(string);
+    callback set-petname(string, string);
+    callback save-settings(string);
+    callback choose-name(string);
+    callback dismiss-notice();
+}
+
+// The time the app has been running, from the host. Controls compare it when they are used, so a
+// click is judged by the real time it came, not by when the screen was last drawn. Unset, it stays
+// at zero and no guarded control ever accepts input.
+export global Clock {
+    callback now() -> duration;
+}

@@ -1,0 +1,76 @@
+import { Palette } from "std-widgets.slint";
+
+export enum ThemePreference { system, light, dark }
+
+// Every colour, size and duration the app draws with. Content never picks any of these.
+export global Theme {
+    in-out property <ThemePreference> preference;
+    out property <bool> dark: preference == ThemePreference.dark ? true
+        : preference == ThemePreference.light ? false
+        : Palette.color-scheme == ColorScheme.dark;
+
+    // Surfaces
+    out property <color> bg: dark ? #111317 : #f4f5f7;
+    out property <color> sidebar: dark ? #16191e : #ffffff;
+    out property <color> surface: dark ? #1c2027 : #ffffff;
+    out property <color> raised: dark ? #232832 : #eef0f3;
+    out property <color> hover: dark ? #262c36 : #e9ecf0;
+    out property <color> selected: dark ? #1f3b38 : #dcf1ee;
+    out property <color> divider: dark ? #2a2f38 : #e2e5ea;
+
+    // Text
+    out property <color> text: dark ? #e8eaed : #1b1e23;
+    out property <color> text-muted: dark ? #9aa1ab : #5c6470;
+    out property <color> text-faint: dark ? #8a919c : #6b737f;
+    out property <color> on-accent: #ffffff;
+
+    // Accent and bubbles
+    out property <color> accent: dark ? #2bb5a0 : #0d8a78;
+    out property <color> accent-hover: dark ? #35c7b1 : #0b7a6a;
+    out property <color> accent-soft: dark ? #1d3d39 : #d5efeb;
+    out property <color> mine: dark ? #145a50 : #0d8a78;
+    out property <color> mine-text: #ffffff;
+    out property <color> mine-meta: #d7f3ee;
+    out property <color> theirs: dark ? #232832 : #ffffff;
+    out property <color> danger: dark ? #f07178 : #c4343d;
+    out property <color> danger-soft: dark ? #3a2226 : #fbe3e5;
+    out property <color> warn: dark ? #e5b454 : #9a6a00;
+    out property <color> warn-soft: dark ? #3a3220 : #fff3d6;
+    out property <color> recording: #e5484d;
+
+    // Reserved for the app's own notices: content cannot produce this frame.
+    out property <color> notice-bg: dark ? #1a1e25 : #e9ecf1;
+    out property <color> notice-border: dark ? #333a46 : #cfd5dd;
+    out property <color> focus-ring: dark ? #7fdccd : #0a5f53;
+
+    // Spacing on an 8px grid
+    out property <length> s1: 4px;
+    out property <length> s2: 8px;
+    out property <length> s3: 12px;
+    out property <length> s4: 16px;
+    out property <length> s5: 24px;
+    out property <length> s6: 32px;
+
+    // Type scale
+    out property <relative-font-size> fs-small: 0.8rem;
+    out property <relative-font-size> fs-body: 0.95rem;
+    out property <relative-font-size> fs-title: 1.1rem;
+    out property <relative-font-size> fs-heading: 1.4rem;
+
+    out property <length> radius-sm: 6px;
+    out property <length> radius: 10px;
+    out property <length> radius-lg: 16px;
+    out property <length> avatar: 36px;
+    out property <length> control: 40px;
+
+    out property <duration> quick: 150ms;
+    out property <duration> settle: 200ms;
+
+    // Narrow windows (phones) stack the chat list and the conversation.
+    out property <length> breakpoint: 720px;
+
+    // Avatar tints, picked by a hash of the member's key so a name cannot choose one.
+    out property <[color]> tints: dark
+        ? [#4f8cc9, #c97a4f, #8f6fd1, #4fae7a, #c95f86, #b3a03f, #3fa6b3, #d16f6f]
+        : [#2f6fae, #b0602f, #6e4fb8, #2f8e5a, #b0446d, #8e7d1f, #1f8592, #b84f4f];
+}

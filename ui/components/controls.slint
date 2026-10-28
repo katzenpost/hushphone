@@ -1,0 +1,262 @@
+import { Theme } from "../theme.slint";
+import { Clock } from "../globals.slint";
+
+// Accepts activation only once its control has been visible, enabled and unmoved for `settle`,
+// so content arriving and shifting the layout cannot steer a click onto it. It reads the host's
+// clock when asked, so the answer never depends on when a timer fires or a frame is drawn.
+export component Stable {
+    in property <bool> enabled: true;
+    in property <duration> settle: 500ms;
+    in property <Point> at;
+    private property <duration> since;
+    private property <Point> seen;
+    private property <bool> was-enabled;
+
+    init => { root.restart(); }
+    changed at => { root.restart(); }
+    changed enabled => { root.restart(); }
+
+    function restart() {
+        root.since = Clock.now();
+        root.seen = root.at;
+        root.was-enabled = root.enabled;
+    }
+
+    // Also checks the position itself, so a move not yet reported by the handlers above still
+    // counts as a move.
+    public function ready() -> bool {
+        if (root.at != root.seen || root.enabled != root.was-enabled) {
+            root.restart();
+            return false;
+        }
+        return root.enabled && Clock.now() - root.since >= root.settle;
+    }
+}
+
+export component Icon inherits Image {
+    in property <image> icon;
+    in property <color> tint: Theme.text;
+    in property <length> size: 20px;
+    source: icon;
+    colorize: tint;
+    width: size;
+    height: size;
+}
+
+// Drawn around a control that has keyboard focus; place it with `x: -3px; y: -3px` and a size
+// 6px larger than the control.
+export component FocusRing inherits Rectangle {
+    in property <bool> shown;
+    in property <length> r: Theme.radius-sm;
+    border-radius: r + 3px;
+    border-width: shown ? 2px : 0px;
+    border-color: Theme.focus-ring;
+}
+
+export component IconButton {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> enabled: true;
+    in property <color> tint: Theme.text-muted;
+    in property <color> tint-active: Theme.text;
+    in property <length> size: Theme.control;
+    in property <bool> round: true;
+    callback activated();
+    private property <bool> keyboard-focus;
+
+    width: size;
+    height: size;
+    accessible-role: button;
+    accessible-label: label;
+    accessible-enabled: enabled;
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
+    forward-focus: fs;
+
+    stable := Stable {
+        enabled: root.enabled;
+        at: root.absolute-position;
+    }
+
+    bg := Rectangle {
+        border-radius: root.round ? self.height / 2 : Theme.radius-sm;
+        background: touch.pressed ? Theme.hover.darker(0.08) : touch.has-hover ? Theme.hover : transparent;
+        animate background { duration: Theme.quick; }
+    }
+
+    FocusRing {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        shown: root.keyboard-focus;
+        r: root.round ? root.height / 2 : Theme.radius-sm;
+    }
+
+    Icon {
+        icon: root.icon;
+        tint: !root.enabled ? Theme.text-faint : touch.has-hover ? root.tint-active : root.tint;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            if (stable.ready()) { root.activated(); }
+        }
+    }
+
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        enabled: root.enabled;
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost => { root.keyboard-focus = false; }
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (stable.ready()) { root.activated(); }
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+export component Button {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> has-icon: false;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    in property <duration> settle: 500ms;
+    callback activated();
+    private property <bool> keyboard-focus;
+
+    min-width: lay.preferred-width;
+    height: Theme.control;
+    accessible-role: button;
+    accessible-label: text;
+    accessible-enabled: enabled;
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
+    forward-focus: fs;
+
+    stable := Stable {
+        enabled: root.enabled;
+        at: root.absolute-position;
+        settle: root.settle;
+    }
+
+    private property <color> fill: root.danger ? Theme.danger : root.primary ? Theme.accent : Theme.raised;
+    private property <color> ink: root.danger || root.primary ? Theme.on-accent : Theme.text;
+
+    Rectangle {
+        border-radius: Theme.radius;
+        background: !root.enabled ? Theme.raised
+            : touch.pressed ? root.fill.darker(0.15)
+            : touch.has-hover ? root.fill.darker(0.07) : root.fill;
+        opacity: root.enabled ? 1 : 0.6;
+        animate background { duration: Theme.quick; }
+    }
+
+    FocusRing {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        shown: root.keyboard-focus;
+        r: Theme.radius;
+    }
+
+    lay := HorizontalLayout {
+        padding-left: Theme.s4;
+        padding-right: Theme.s4;
+        spacing: Theme.s2;
+        alignment: center;
+        if root.has-icon: Icon {
+            y: (parent.height - self.height) / 2;
+            icon: root.icon;
+            tint: root.enabled ? root.ink : Theme.text-faint;
+            size: 18px;
+        }
+        Text {
+            text: root.text;
+            color: root.enabled ? root.ink : Theme.text-faint;
+            font-size: Theme.fs-body;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            if (stable.ready()) { root.activated(); }
+        }
+    }
+
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        enabled: root.enabled;
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost => { root.keyboard-focus = false; }
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (stable.ready()) { root.activated(); }
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+export component Avatar {
+    // One grapheme, picked by the host: a name cannot fill the circle with text of its own.
+    in property <string> initial;
+    in property <int> tint;
+    in property <length> size: Theme.avatar;
+    width: size;
+    height: size;
+    accessible-role: none;
+
+    Rectangle {
+        border-radius: self.width / 2;
+        background: Theme.tints[mod(root.tint, Theme.tints.length)];
+        clip: true;
+        Text {
+            text: root.initial == "" ? "?" : root.initial;
+            width: root.size * 0.6;
+            horizontal-alignment: center;
+            overflow: clip;
+            wrap: no-wrap;
+            color: #ffffff;
+            font-size: root.size * 0.42;
+            font-weight: 700;
+        }
+    }
+}
+
+export component Badge {
+    in property <int> count;
+    width: max(20px, t.preferred-width + 12px);
+    height: 20px;
+    accessible-role: text;
+    accessible-label: count + " unread";
+    Rectangle {
+        border-radius: self.height / 2;
+        background: Theme.accent;
+    }
+    t := Text {
+        text: root.count > 99 ? "99+" : root.count;
+        color: Theme.on-accent;
+        font-size: Theme.fs-small;
+        font-weight: 700;
+    }
+}

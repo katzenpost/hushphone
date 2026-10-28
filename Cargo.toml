@@ -1,0 +1,77 @@
+[package]
+name = "hushphone"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "AGPL-3.0-only"
+description = "Group chat over the Katzenpost mixnet, for Linux and Android"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+# For test builds only: lets Android screenshots and screen recording see the window.
+test-screenshots = []
+
+[[bin]]
+name = "hushphone"
+path = "src/main.rs"
+
+[dependencies]
+slint = "=1.18.1"
+pigeonhole-katzenqt1-client = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
+pigeonhole-katzenqt1-engine = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
+pigeonhole-transport = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
+pigeonhole-transport-thinclient = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
+katzenpost_thin_client = "=0.0.25"
+rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "533a72647143ecbbf22038dcab82ad3cc2ae537b" }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+sha2 = "0.10"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+unicode-security = "0.1.2"
+unicode-segmentation = "1.13"
+unicode-normalization = "0.1"
+infer = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+dirs = "7"
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
+arboard = { version = "3.7", features = ["wayland-data-control"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "open_uri"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }
+jni = "0.21"
+
+[build-dependencies]
+slint-build = "=1.18.1"
+
+[dev-dependencies]
+i-slint-backend-testing = "=1.18.1"
+tempfile = "3"
+proptest = "1"
+
+[package.metadata.android]
+package = "network.katzenpost.hushphone"
+build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
+apk_name = "hushphone"
+
+[package.metadata.android.sdk]
+min_sdk_version = 28
+target_sdk_version = 36
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.RECORD_AUDIO"
+
+[package.metadata.android.application]
+label = "hushphone"
+
+[package.metadata.android.application.activity]
+config_changes = "orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
+launch_mode = "singleTop"
