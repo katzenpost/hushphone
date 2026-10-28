@@ -44,6 +44,8 @@ pub struct Setup {
     pub default_daemon: String,
     /// A name given on the command line, for a first start without asking.
     pub name: Option<String>,
+    /// Daemon addresses an older version saved as its default, to move to `default_daemon`.
+    pub old_defaults: Vec<String>,
 }
 
 struct App {
@@ -94,7 +96,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         settings.name = text::name(n);
         let _ = settings.save(&setup.data_dir);
     }
-    if settings.daemon.is_empty() {
+    if settings.daemon.is_empty() || setup.old_defaults.contains(&settings.daemon) {
         settings.daemon = setup.default_daemon.clone();
     }
     let chat_model = Rc::new(VecModel::default());

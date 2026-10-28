@@ -52,8 +52,15 @@ are the same.
 
 ## Android
 
-hushphone reaches kpclientd at `127.0.0.1:64331`, where
-[kpclientd-android](https://github.com/bfix/kpclientd-android) serves it.
+hushphone reaches the mixnet through
+[kpclientd-android](https://github.com/katzenpost/kpclientd-android), which runs kpclientd on the
+phone and lets in only the apps you allow.
+- **Asking.** On its first start, hushphone asks kpclientd-android for a connection.
+  kpclientd-android then asks you whether hushphone may use the mixnet.
+- **Connecting.** Once you allow it, every connection hushphone makes comes from kpclientd-android
+  as a unix socket. hushphone joins it to a socket in its own private directory, which its thin
+  client dials.
+- **No network.** hushphone has no internet permission and opens no IP socket.
 
 ```sh
 cargo install cargo-apk
@@ -112,9 +119,9 @@ whatever other members send is untrusted.
     allows unix sockets and no IP, no programs, writes only to hushphone's own data and cache
     and to Downloads, and reads of the files you attach. To reach kpclientd over TCP, add
     `network inet stream,` to `/etc/apparmor.d/local/hushphone`.
-  - **Android.** kpclientd-android listens on TCP at 127.0.0.1, so there hushphone runs under
-    the filter that also allows TCP. Android already sandboxes every app with SELinux and its own
-    seccomp filter, and ours comes on top.
+  - **Android.** hushphone gets its connections to kpclientd from kpclientd-android, as unix
+    sockets, so the unix-only filter applies there too, on top of Android's own SELinux and
+    seccomp sandbox. The app does not even ask for the internet permission.
 
 ## Tests
 

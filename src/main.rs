@@ -52,6 +52,7 @@ fn main() {
         source: source.unwrap_or_else(|| Source::Daemon(daemon.clone().unwrap_or_default())),
         default_daemon: daemon.unwrap_or(default_daemon),
         name,
+        old_defaults: Vec::new(),
     };
     if let Err(e) = hushphone::run(setup) {
         eprintln!("hushphone: {e}");

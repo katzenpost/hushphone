@@ -131,6 +131,8 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
                         tokio::time::sleep(wait).await;
                     }
                     Err(e) => {
+                        #[cfg(target_os = "android")]
+                        let e = crate::android::problem().unwrap_or_else(|| e.to_string());
                         tell(Update::Link(Link::Unreachable));
                         tell(Update::Failed(format!(
                             "Can't reach kpclientd at {addr}: {e}. Trying again in {} s.",
