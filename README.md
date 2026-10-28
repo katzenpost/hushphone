@@ -99,6 +99,22 @@ whatever other members send is untrusted.
 - **Notices never take over.** Dialogs open only from your own action. Notices from the network
   never take the focus.
 - **On disk.** Settings are written with mode 0600. Logs hold no message text.
+- **Sandboxed.** kpclientd does all the networking, so hushphone needs very little of the system.
+  - **seccomp.** Once hushphone knows the daemon's address, it puts a seccomp filter on every
+    thread. With kpclientd on a unix socket, as on Linux (`@katzenpost`), it may open unix
+    sockets only, with no TCP or UDP at all. With kpclientd at `host:port`, as on Android, it may
+    also open TCP sockets, but still no UDP or raw ones. In either case it cannot start a program,
+    trace a process or read its memory, use io_uring, BPF or perf, load kernel modules, mount, or
+    change namespaces. The filter cannot be lifted while the app runs, so a TCP address set in
+    Settings takes effect after a restart. `HUSHPHONE_SANDBOX=off` leaves the filter off, for
+    debugging.
+  - **AppArmor.** The Debian package installs an AppArmor profile, `/etc/apparmor.d/hushphone`. It
+    allows unix sockets and no IP, no programs, writes only to hushphone's own data and cache
+    and to Downloads, and reads of the files you attach. To reach kpclientd over TCP, add
+    `network inet stream,` to `/etc/apparmor.d/local/hushphone`.
+  - **Android.** kpclientd-android listens on TCP at 127.0.0.1, so there hushphone runs under
+    the filter that also allows TCP. Android already sandboxes every app with SELinux and its own
+    seccomp filter, and ours comes on top.
 
 ## Tests
 

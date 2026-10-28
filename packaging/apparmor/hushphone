@@ -1,0 +1,59 @@
+# AppArmor profile for hushphone. kpclientd does all the networking, so hushphone may use unix
+# sockets only: no IP at all. It reads and writes its own data, reads the files a user attaches,
+# saves into Downloads or through the desktop's file chooser, and starts no program.
+#
+# A kpclientd reached at host:port needs TCP; allow it in /etc/apparmor.d/local/hushphone with
+#   network inet stream,
+#   network inet6 stream,
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile hushphone /usr/bin/hushphone {
+  include <abstractions/base>
+  include if exists <abstractions/audio>
+  include if exists <abstractions/dri-enumerate>
+  include if exists <abstractions/fonts>
+  include if exists <abstractions/freedesktop.org>
+  include if exists <abstractions/mesa>
+  include if exists <abstractions/nameservice-strict>
+  include if exists <abstractions/user-download>
+  include if exists <abstractions/wayland>
+  include if exists <abstractions/X>
+
+  # kpclientd's socket, the display, the session bus and the sound server.
+  unix,
+  dbus bus=session,
+  owner /run/user/[0-9]*/bus rw,
+  # Refused and logged: nothing in hushphone should ever try.
+  audit deny network inet,
+  audit deny network inet6,
+  audit deny network raw,
+  audit deny network packet,
+
+  /usr/bin/hushphone mr,
+
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+  /sys/fs/cgroup/** r,
+  /sys/devices/system/cpu/** r,
+  owner /dev/shm/* rw,
+
+  owner @{HOME}/.local/ w,
+  owner @{HOME}/.local/share/ w,
+  owner @{HOME}/.cache/ w,
+  owner @{HOME}/.local/share/hushphone/ rw,
+  owner @{HOME}/.local/share/hushphone/** rwk,
+  owner @{HOME}/.cache/hushphone/ rw,
+  owner @{HOME}/.cache/hushphone/** rwk,
+  # Mesa's compiled shaders.
+  owner @{HOME}/.cache/mesa_shader_cache/ rw,
+  owner @{HOME}/.cache/mesa_shader_cache/** rwk,
+
+  # Files the user attaches, and the documents the file chooser hands over.
+  owner @{HOME}/** r,
+  owner /run/user/[0-9]*/doc/** rw,
+
+  include if exists <local/hushphone>
+}

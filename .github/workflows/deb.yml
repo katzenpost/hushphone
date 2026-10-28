@@ -1,7 +1,8 @@
 name: Debian packages
 
 # Builds the package in the build image for each distro, installs and tests it, and checks that a
-# second build in another directory is the same.
+# second build in another directory is the same. Then, on a host with AppArmor, installs the
+# Ubuntu package and tests its profile in force.
 
 on:
   push:
@@ -11,6 +12,7 @@ on:
       - .github/workflows/deb.yml
       - debian/**
       - packaging/**
+      - src/sandbox.rs
       - Makefile
       - Cargo.toml
       - Cargo.lock
@@ -37,3 +39,14 @@ jobs:
         with:
           name: deb-${{ matrix.distro }}
           path: dist/*.deb
+
+  apparmor:
+    needs: deb
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: deb-ubuntu-24.04
+      - run: sudo apt-get update && sudo apt-get install -y xvfb ./hushphone_*.deb
+      - run: packaging/apparmor/test.sh

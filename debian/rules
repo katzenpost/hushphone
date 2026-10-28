@@ -24,6 +24,10 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -D -m 0755 target/release/hushphone debian/hushphone/usr/bin/hushphone
 
+override_dh_install:
+	dh_install
+	dh_apparmor --profile-name=hushphone -phushphone
+
 override_dh_dwz:
 	:
 
