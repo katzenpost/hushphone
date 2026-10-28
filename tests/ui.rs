@@ -97,3 +97,33 @@ fn a_control_that_moves_must_settle_again() {
     new_group.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::NewGroup);
 }
+
+#[test]
+fn releasing_the_talk_button_sends_after_the_composer_changes() {
+    use slint::platform::WindowEvent;
+    let ui = window();
+    let started = Rc::new(Cell::new(0));
+    let stopped = Rc::new(Cell::new(0));
+    let (s, t) = (started.clone(), stopped.clone());
+    let st = ui.global::<hushphone::AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    let weak = ui.as_weak();
+    ui.global::<Actions>().on_ptt_start(move || {
+        s.set(s.get() + 1);
+        // As the host does: the composer turns into the recording bar.
+        weak.upgrade().unwrap().global::<hushphone::AppState>().set_recording(true);
+    });
+    ui.global::<Actions>().on_ptt_stop(move || t.set(t.get() + 1));
+    let talk = button(&ui, "Hold to record a voice message");
+    mock_elapsed_time(Duration::from_millis(600));
+    let p = talk.absolute_position();
+    let at = slint::LogicalPosition::new(p.x + talk.size().width / 2.0, p.y + talk.size().height / 2.0);
+    ui.window().dispatch_event(WindowEvent::PointerMoved { position: at });
+    ui.window().dispatch_event(WindowEvent::PointerPressed { position: at, button: PointerEventButton::Left });
+    assert_eq!(started.get(), 1);
+    mock_elapsed_time(Duration::from_millis(2000));
+    ui.window().dispatch_event(WindowEvent::PointerReleased { position: at, button: PointerEventButton::Left });
+    assert_eq!(stopped.get(), 1, "the release reaches the button that saw the press");
+}
