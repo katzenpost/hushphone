@@ -9,7 +9,9 @@ denials() {
 
 sudo aa-status --json | grep -q '"hushphone": *"enforce"'
 
-if sudo aa-exec -p hushphone -- /bin/true 2>/dev/null; then
+# A process under the profile cannot start another program. (aa-exec applies the profile as it
+# starts the shell; the shell, now confined, then tries to start /bin/true.)
+if sudo aa-exec -p hushphone -- /bin/sh -c '/bin/true && echo STARTED' 2>/dev/null | grep -q STARTED; then
     echo "a program started under the profile" >&2
     exit 1
 fi
