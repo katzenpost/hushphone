@@ -9,6 +9,10 @@ description = "Group chat over the Katzenpost mixnet, for Linux and Android"
 [lib]
 crate-type = ["rlib", "cdylib"]
 
+[features]
+# For test builds only: lets Android screenshots and screen recording see the window.
+test-screenshots = []
+
 [[bin]]
 name = "hushphone"
 path = "src/main.rs"
@@ -40,7 +44,7 @@ ashpd = { version = "0.13", default-features = false, features = ["tokio", "open
 
 [target.'cfg(target_os = "android")'.dependencies]
 slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }
-jni = "0.22"
+jni = "0.21"
 ndk-context = "0.1"
 
 [build-dependencies]
@@ -50,3 +54,25 @@ slint-build = "=1.18.1"
 i-slint-backend-testing = "=1.18.1"
 tempfile = "3"
 proptest = "1"
+
+[package.metadata.android]
+package = "network.katzenpost.hushphone"
+build_targets = ["aarch64-linux-android", "x86_64-linux-android"]
+apk_name = "hushphone"
+
+[package.metadata.android.sdk]
+min_sdk_version = 28
+target_sdk_version = 36
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.INTERNET"
+
+[[package.metadata.android.uses_permission]]
+name = "android.permission.RECORD_AUDIO"
+
+[package.metadata.android.application]
+label = "hushphone"
+
+[package.metadata.android.application.activity]
+config_changes = "orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
+launch_mode = "singleTop"

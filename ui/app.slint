@@ -722,7 +722,7 @@ component NameDialog inherits Dialog {
     HorizontalLayout {
         alignment: end;
         spacing: Theme.s2;
-        Button { text: "Cancel"; activated => { root.dismissed(); } }
+        if root.closable: Button { text: "Cancel"; activated => { root.dismissed(); } }
         Button {
             text: root.action;
             primary: true;
@@ -865,6 +865,13 @@ export component AppWindow inherits Window {
     in-out property <bool> show-conversation;
     in-out property <bool> blanked;
     private property <bool> narrow: root.width < Theme.breakpoint;
+    // The part of the window clear of system bars, notches and an open on-screen keyboard.
+    private property <length> inset-top: root.safe-area-insets.top;
+    private property <length> inset-left: root.safe-area-insets.left;
+    private property <length> inset-right: root.safe-area-insets.right;
+    private property <length> inset-bottom: root.virtual-keyboard-size.height > 0
+        ? max(root.safe-area-insets.bottom, root.height - root.virtual-keyboard-position.y)
+        : root.safe-area-insets.bottom;
     private property <MemberItem> target;
 
     FocusScope {
@@ -876,208 +883,216 @@ export component AppWindow inherits Window {
             reject
         }
 
-        // Placed by hand rather than in a layout: which panes exist depends on the width, and a
-        // layout's minimum width would in turn depend on them.
-        Sidebar {
-            x: 0;
-            y: 0;
-            width: root.narrow ? root.width : 320px;
-            height: root.height;
-            visible: !root.narrow || !root.show-conversation;
-            open-chat(id) => {
-                Actions.select-chat(id);
-                root.show-conversation = true;
-            }
-            new-group => { root.overlay = Overlay.new-group; }
-            join-group => { root.overlay = Overlay.join; }
-            settings => { root.overlay = Overlay.settings; }
-        }
-        Rectangle {
-            x: 320px;
-            y: 0;
-            width: 1px;
-            height: root.height;
-            visible: !root.narrow;
-            background: Theme.divider;
-        }
-        if AppState.current != "": Conversation {
-            x: root.narrow ? 0 : 321px;
-            y: 0;
-            width: root.narrow ? root.width : root.width - 321px;
-            height: root.height;
-            visible: !root.narrow || root.show-conversation;
-            narrow: root.narrow;
-            back => { root.show-conversation = false; }
-            members => { root.overlay = Overlay.members; }
-            invite => { root.overlay = Overlay.invite; }
-            rename => { root.overlay = Overlay.rename; }
-            clear => { root.overlay = Overlay.confirm-clear; }
-            leave => { root.overlay = Overlay.confirm-leave; }
-        }
-        if AppState.current == "": Welcome {
-            x: 321px;
-            y: 0;
-            width: root.width - 321px;
-            height: root.height;
-            visible: !root.narrow;
-            new-group => { root.overlay = Overlay.new-group; }
-            join-group => { root.overlay = Overlay.join; }
-        }
+        area := Rectangle {
+            x: root.inset-left;
+            y: root.inset-top;
+            width: root.width - root.inset-left - root.inset-right;
+            height: root.height - root.inset-top - root.inset-bottom;
 
-        // Notices from the host never take focus or open a dialog: a strip at the bottom.
-        if AppState.notice != "": Rectangle {
-            y: parent.height - self.height - Theme.s4;
-            x: (parent.width - self.width) / 2;
-            width: min(560px, parent.width - 2 * Theme.s4);
-            height: toast.preferred-height;
-            border-radius: Theme.radius;
-            background: AppState.notice-error ? Theme.danger-soft : Theme.surface;
-            border-width: 1px;
-            border-color: AppState.notice-error ? Theme.danger : Theme.divider;
-            drop-shadow-blur: 12px;
-            drop-shadow-color: #00000030;
-            toast := HorizontalLayout {
-                padding: Theme.s3;
-                padding-left: Theme.s4;
-                spacing: Theme.s3;
-                Icon {
-                    y: (parent.height - self.height) / 2;
-                    icon: @image-url("icons/alert.svg");
-                    tint: AppState.notice-error ? Theme.danger : Theme.accent;
-                    size: 18px;
+            // Placed by hand rather than in a layout: which panes exist depends on the width, and a
+            // layout's minimum width would in turn depend on them.
+            Sidebar {
+                x: 0;
+                y: 0;
+                width: root.narrow ? area.width : 320px;
+                height: area.height;
+                visible: !root.narrow || !root.show-conversation;
+                open-chat(id) => {
+                    Actions.select-chat(id);
+                    root.show-conversation = true;
                 }
-                Text {
-                    text: AppState.notice;
-                    color: Theme.text;
-                    font-size: Theme.fs-small;
-                    wrap: word-wrap;
-                    vertical-alignment: center;
-                    horizontal-stretch: 1;
-                }
-                IconButton {
-                    size: 28px;
-                    icon: @image-url("icons/close.svg");
-                    label: "Dismiss";
-                    activated => { Actions.dismiss-notice(); }
-                }
+                new-group => { root.overlay = Overlay.new-group; }
+                join-group => { root.overlay = Overlay.join; }
+                settings => { root.overlay = Overlay.settings; }
             }
-        }
+            Rectangle {
+                x: 320px;
+                y: 0;
+                width: 1px;
+                height: area.height;
+                visible: !root.narrow;
+                background: Theme.divider;
+            }
+            if AppState.current != "": Conversation {
+                x: root.narrow ? 0 : 321px;
+                y: 0;
+                width: root.narrow ? area.width : area.width - 321px;
+                height: area.height;
+                visible: !root.narrow || root.show-conversation;
+                narrow: root.narrow;
+                back => { root.show-conversation = false; }
+                members => { root.overlay = Overlay.members; }
+                invite => { root.overlay = Overlay.invite; }
+                rename => { root.overlay = Overlay.rename; }
+                clear => { root.overlay = Overlay.confirm-clear; }
+                leave => { root.overlay = Overlay.confirm-leave; }
+            }
+            if AppState.current == "": Welcome {
+                x: 321px;
+                y: 0;
+                width: area.width - 321px;
+                height: area.height;
+                visible: !root.narrow;
+                new-group => { root.overlay = Overlay.new-group; }
+                join-group => { root.overlay = Overlay.join; }
+            }
 
-        if root.overlay == Overlay.first-run: NameDialog {
-            title: "Welcome to hushphone";
-            label: "Your name";
-            hint: "Members of your groups see this name next to your messages. It can't be changed later.";
-            action: "Continue";
-            dismissed => { }
-            submitted(v) => {
-                Actions.choose-name(v);
-                root.overlay = Overlay.none;
+            // Notices from the host never take focus or open a dialog: a strip at the bottom.
+            if AppState.notice != "": Rectangle {
+                y: parent.height - self.height - Theme.s4;
+                x: (parent.width - self.width) / 2;
+                width: min(560px, parent.width - 2 * Theme.s4);
+                height: toast.preferred-height;
+                border-radius: Theme.radius;
+                background: AppState.notice-error ? Theme.danger-soft : Theme.surface;
+                border-width: 1px;
+                border-color: AppState.notice-error ? Theme.danger : Theme.divider;
+                drop-shadow-blur: 12px;
+                drop-shadow-color: #00000030;
+                toast := HorizontalLayout {
+                    padding: Theme.s3;
+                    padding-left: Theme.s4;
+                    spacing: Theme.s3;
+                    Icon {
+                        y: (parent.height - self.height) / 2;
+                        icon: @image-url("icons/alert.svg");
+                        tint: AppState.notice-error ? Theme.danger : Theme.accent;
+                        size: 18px;
+                    }
+                    Text {
+                        text: AppState.notice;
+                        color: Theme.text;
+                        font-size: Theme.fs-small;
+                        wrap: word-wrap;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    IconButton {
+                        size: 28px;
+                        icon: @image-url("icons/close.svg");
+                        label: "Dismiss";
+                        activated => { Actions.dismiss-notice(); }
+                    }
+                }
             }
-        }
-        if root.overlay == Overlay.new-group: NameDialog {
-            title: "New group";
-            label: "Group name";
-            hint: "Only you see this name. Members name the group for themselves.";
-            action: "Create";
-            dismissed => { root.overlay = Overlay.none; }
-            submitted(v) => {
-                Actions.create-group(v);
-                root.overlay = Overlay.none;
-                root.show-conversation = true;
+
+            if root.overlay == Overlay.first-run: NameDialog {
+                title: "Welcome to hushphone";
+                closable: false;
+                label: "Your name";
+                hint: "Members of your groups see this name next to your messages. It can't be changed later.";
+                action: "Continue";
+                dismissed => { }
+                submitted(v) => {
+                    Actions.choose-name(v);
+                    root.overlay = Overlay.none;
+                }
             }
-        }
-        if root.overlay == Overlay.join: NameDialog {
-            title: "Join a group";
-            label: "What you will call the group";
-            hint: "hushphone mints a voucher code over the mixnet. Give it to a member of the group, who adds you with it.";
-            action: "Get a voucher";
-            dismissed => { root.overlay = Overlay.none; }
-            submitted(v) => {
-                Actions.join-group(v);
-                root.overlay = Overlay.none;
-                root.show-conversation = true;
+            if root.overlay == Overlay.new-group: NameDialog {
+                title: "New group";
+                label: "Group name";
+                hint: "Only you see this name. Members name the group for themselves.";
+                action: "Create";
+                dismissed => { root.overlay = Overlay.none; }
+                submitted(v) => {
+                    Actions.create-group(v);
+                    root.overlay = Overlay.none;
+                    root.show-conversation = true;
+                }
             }
-        }
-        if root.overlay == Overlay.invite: NameDialog {
-            title: "Add a member to " + AppState.current-name;
-            label: "Their voucher code";
-            hint: "Paste the code the newcomer gave you. They will see the group's members and its messages from now on.";
-            action: "Add member";
-            dismissed => { root.overlay = Overlay.none; }
-            submitted(v) => {
-                Actions.invite(v);
-                root.overlay = Overlay.none;
+            if root.overlay == Overlay.join: NameDialog {
+                title: "Join a group";
+                label: "What you will call the group";
+                hint: "hushphone mints a voucher code over the mixnet. Give it to a member of the group, who adds you with it.";
+                action: "Get a voucher";
+                dismissed => { root.overlay = Overlay.none; }
+                submitted(v) => {
+                    Actions.join-group(v);
+                    root.overlay = Overlay.none;
+                    root.show-conversation = true;
+                }
             }
-        }
-        if root.overlay == Overlay.rename: NameDialog {
-            title: "Rename group";
-            label: "Group name";
-            value: AppState.current-name;
-            hint: "Only you see this name.";
-            action: "Rename";
-            dismissed => { root.overlay = Overlay.none; }
-            submitted(v) => {
-                Actions.rename(v);
-                root.overlay = Overlay.none;
+            if root.overlay == Overlay.invite: NameDialog {
+                title: "Add a member to " + AppState.current-name;
+                label: "Their voucher code";
+                hint: "Paste the code the newcomer gave you. They will see the group's members and its messages from now on.";
+                action: "Add member";
+                dismissed => { root.overlay = Overlay.none; }
+                submitted(v) => {
+                    Actions.invite(v);
+                    root.overlay = Overlay.none;
+                }
             }
-        }
-        if root.overlay == Overlay.petname: NameDialog {
-            title: "Name this member";
-            label: "Your name for ~" + root.target.fingerprint;
-            value: root.target.petname;
-            hint: "They call themself \"" + root.target.name + "\". Your name for them is shown instead, in bold, and only to you.";
-            action: "Save";
-            dismissed => { root.overlay = Overlay.members; }
-            submitted(v) => {
-                Actions.set-petname(root.target.key, v);
-                root.overlay = Overlay.members;
+            if root.overlay == Overlay.rename: NameDialog {
+                title: "Rename group";
+                label: "Group name";
+                value: AppState.current-name;
+                hint: "Only you see this name.";
+                action: "Rename";
+                dismissed => { root.overlay = Overlay.none; }
+                submitted(v) => {
+                    Actions.rename(v);
+                    root.overlay = Overlay.none;
+                }
             }
-        }
-        if root.overlay == Overlay.members: MembersDialog {
-            title: "Members of " + AppState.current-name;
-            dismissed => { root.overlay = Overlay.none; }
-            rename-member(m) => {
-                root.target = m;
-                root.overlay = Overlay.petname;
+            if root.overlay == Overlay.petname: NameDialog {
+                title: "Name this member";
+                label: "Your name for ~" + root.target.fingerprint;
+                value: root.target.petname;
+                hint: "They call themself \"" + root.target.name + "\". Your name for them is shown instead, in bold, and only to you.";
+                action: "Save";
+                dismissed => { root.overlay = Overlay.members; }
+                submitted(v) => {
+                    Actions.set-petname(root.target.key, v);
+                    root.overlay = Overlay.members;
+                }
             }
-            remove-member(m) => {
-                root.target = m;
-                root.overlay = Overlay.confirm-remove;
+            if root.overlay == Overlay.members: MembersDialog {
+                title: "Members of " + AppState.current-name;
+                dismissed => { root.overlay = Overlay.none; }
+                rename-member(m) => {
+                    root.target = m;
+                    root.overlay = Overlay.petname;
+                }
+                remove-member(m) => {
+                    root.target = m;
+                    root.overlay = Overlay.confirm-remove;
+                }
             }
-        }
-        if root.overlay == Overlay.settings: SettingsDialog {
-            title: "Settings";
-            dismissed => { root.overlay = Overlay.none; }
-        }
-        if root.overlay == Overlay.confirm-leave: ConfirmDialog {
-            title: "Leave " + AppState.current-name + "?";
-            body: "You stop reading and writing this group, and it is removed from this device with its history. Others keep their copies. To come back, someone must add you again.";
-            action: "Leave group";
-            dismissed => { root.overlay = Overlay.none; }
-            confirmed => {
-                Actions.leave();
-                root.overlay = Overlay.none;
-                root.show-conversation = false;
+            if root.overlay == Overlay.settings: SettingsDialog {
+                title: "Settings";
+                dismissed => { root.overlay = Overlay.none; }
             }
-        }
-        if root.overlay == Overlay.confirm-clear: ConfirmDialog {
-            title: "Clear the history of " + AppState.current-name + "?";
-            body: "Every message in this group is deleted from this device. Other members keep theirs. This cannot be undone.";
-            action: "Clear history";
-            dismissed => { root.overlay = Overlay.none; }
-            confirmed => {
-                Actions.clear();
-                root.overlay = Overlay.none;
+            if root.overlay == Overlay.confirm-leave: ConfirmDialog {
+                title: "Leave " + AppState.current-name + "?";
+                body: "You stop reading and writing this group, and it is removed from this device with its history. Others keep their copies. To come back, someone must add you again.";
+                action: "Leave group";
+                dismissed => { root.overlay = Overlay.none; }
+                confirmed => {
+                    Actions.leave();
+                    root.overlay = Overlay.none;
+                    root.show-conversation = false;
+                }
             }
-        }
-        if root.overlay == Overlay.confirm-remove: ConfirmDialog {
-            title: "Stop reading " + (root.target.petname != "" ? root.target.petname : root.target.name) + "?";
-            body: "You no longer read their messages in " + AppState.current-name + ". They are not told, and other members still read them.";
-            action: "Stop reading";
-            dismissed => { root.overlay = Overlay.members; }
-            confirmed => {
-                Actions.remove-member(root.target.key);
-                root.overlay = Overlay.members;
+            if root.overlay == Overlay.confirm-clear: ConfirmDialog {
+                title: "Clear the history of " + AppState.current-name + "?";
+                body: "Every message in this group is deleted from this device. Other members keep theirs. This cannot be undone.";
+                action: "Clear history";
+                dismissed => { root.overlay = Overlay.none; }
+                confirmed => {
+                    Actions.clear();
+                    root.overlay = Overlay.none;
+                }
+            }
+            if root.overlay == Overlay.confirm-remove: ConfirmDialog {
+                title: "Stop reading " + (root.target.petname != "" ? root.target.petname : root.target.name) + "?";
+                body: "You no longer read their messages in " + AppState.current-name + ". They are not told, and other members still read them.";
+                action: "Stop reading";
+                dismissed => { root.overlay = Overlay.members; }
+                confirmed => {
+                    Actions.remove-member(root.target.key);
+                    root.overlay = Overlay.members;
+                }
             }
         }
 

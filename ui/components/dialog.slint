@@ -6,13 +6,15 @@ import { Icon, IconButton } from "controls.slint";
 export component Dialog {
     in property <string> title;
     in property <length> panel-width: 420px;
+    // A dialog that must be answered has no way to close it.
+    in property <bool> closable: true;
     callback dismissed();
     width: 100%;
     height: 100%;
 
     // Swallow pointer input to whatever lies beneath, and close on a press outside the panel.
     TouchArea {
-        clicked => { root.dismissed(); }
+        clicked => { if (root.closable) { root.dismissed(); } }
     }
     Rectangle {
         background: #000000a0;
@@ -20,7 +22,7 @@ export component Dialog {
 
     FocusScope {
         key-pressed(e) => {
-            if (e.text == Key.Escape) {
+            if (e.text == Key.Escape && root.closable) {
                 root.dismissed();
                 return accept;
             }
@@ -55,7 +57,7 @@ export component Dialog {
                         overflow: elide;
                         horizontal-stretch: 1;
                     }
-                    IconButton {
+                    if root.closable: IconButton {
                         size: 32px;
                         icon: @image-url("../icons/close.svg");
                         label: "Close";

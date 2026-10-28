@@ -2217,7 +2217,7 @@ dependencies = [
  "hex",
  "i-slint-backend-testing",
  "infer",
- "jni 0.22.4",
+ "jni 0.21.1",
  "katzenpost_thin_client",
  "ndk-context",
  "pigeonhole-katzenqt1-client",
