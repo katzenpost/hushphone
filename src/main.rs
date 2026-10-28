@@ -12,6 +12,8 @@ const USAGE: &str = "usage: hushphone [--daemon ADDRESS] [--sim SOCKET] [--memor
   --name NAME       your name, on the first start";
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    hushphone::harden::process();
     let mut daemon = None;
     let mut source = None;
     let mut data = None;

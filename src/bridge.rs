@@ -89,6 +89,10 @@ fn later(f: impl FnOnce(&mut App) + Send + 'static) {
 }
 
 pub fn start(ui: &AppWindow, setup: Setup) {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if let Err(e) = crate::harden::data_dir(&setup.data_dir) {
+        eprintln!("hushphone: can't restrict {}: {e}", setup.data_dir.display());
+    }
     let mut settings = Settings::load(&setup.data_dir);
     if settings.name.is_empty()
         && let Some(n) = &setup.name
