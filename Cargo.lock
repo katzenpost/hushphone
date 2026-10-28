@@ -323,7 +323,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1339,7 +1339,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1540,7 +1540,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2214,6 +2214,7 @@ dependencies = [
  "ashpd",
  "chrono",
  "dirs",
+ "futures-util",
  "hex",
  "i-slint-backend-testing",
  "infer",
@@ -4160,7 +4161,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole-katzenqt1-client"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -4177,7 +4178,7 @@ dependencies = [
 [[package]]
 name = "pigeonhole-katzenqt1-engine"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "base64 0.22.1",
  "indexmap",
@@ -4189,7 +4190,7 @@ dependencies = [
 [[package]]
 name = "pigeonhole-katzenqt1-member"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "blake2",
  "ed25519-dalek",
@@ -4204,7 +4205,7 @@ dependencies = [
 [[package]]
 name = "pigeonhole-katzenqt1-wire"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "sha2",
 ]
@@ -4212,7 +4213,7 @@ dependencies = [
 [[package]]
 name = "pigeonhole-transport"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -4225,7 +4226,7 @@ dependencies = [
 [[package]]
 name = "pigeonhole-transport-thinclient"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole?rev=3b1aab840cc6bc04a872fb73847ea34aa61c6a0d#3b1aab840cc6bc04a872fb73847ea34aa61c6a0d"
+source = "git+https://github.com/katzenpost/pigeonhole?rev=f1f75e8112617cb9289cb42b3dffe895152e0629#f1f75e8112617cb9289cb42b3dffe895152e0629"
 dependencies = [
  "katzenpost_thin_client",
  "pigeonhole-transport",
@@ -4885,7 +4886,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4898,7 +4899,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5561,7 +5562,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -6628,15 +6629,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets 0.52.6",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]

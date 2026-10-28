@@ -12,6 +12,7 @@ use pigeonhole_transport::Backend;
 use pigeonhole_transport::remote::Remote;
 use pigeonhole_transport::sim::World;
 use pigeonhole_transport_thinclient::ThinClientBackend;
+use futures_util::FutureExt;
 use tokio::sync::mpsc;
 
 /// Where Pigeonhole is.
@@ -102,11 +103,11 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
     match &p.source {
         Source::Memory(w) => {
             tell(Update::Link(Link::Online));
-            serve(cfg(), w.clone(), None, &mut rx, &tell).await
+            serve(cfg(), w.clone(), None, &mut rx, &tell).await;
         }
         Source::SimSocket(s) => {
             tell(Update::Link(Link::Online));
-            serve(cfg(), Remote { socket: s.clone() }, None, &mut rx, &tell).await
+            serve(cfg(), Remote { socket: s.clone() }, None, &mut rx, &tell).await;
         }
         Source::Daemon(addr) => {
             let mut wait = Duration::from_secs(1);
@@ -115,9 +116,19 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
                 match ThinClientBackend::dial(addr).await {
                     Ok(b) => {
                         let thin = b.client.clone();
-                        serve(cfg(), b, Some(thin.clone()), &mut rx, &tell).await;
+                        // A client that stops, or panics, is opened again on a new connection
+                        // rather than leaving the app without its groups.
+                        let served = std::panic::AssertUnwindSafe(serve(cfg(), b, Some(thin.clone()), &mut rx, &tell))
+                            .catch_unwind()
+                            .await;
                         thin.stop().await;
-                        return;
+                        match served {
+                            Ok(Served::Quit) => return,
+                            Ok(Served::Stopped) => {}
+                            Err(_) => tell(Update::Stopped("the client failed".into())),
+                        }
+                        wait = Duration::from_secs(1);
+                        tokio::time::sleep(wait).await;
                     }
                     Err(e) => {
                         tell(Update::Link(Link::Unreachable));
@@ -159,17 +170,29 @@ async fn send_chat(c: &Client, id: &str, first: usize, dropped: Vec<usize>, unac
     tell(Update::Chat { view, from: first, lines, dropped, paths });
 }
 
+/// How serving a client ended.
+enum Served {
+    /// The app is closing.
+    Quit,
+    /// The client stopped; a new one may be opened.
+    Stopped,
+}
+
 async fn serve<B: Backend>(
     cfg: Config,
     backend: B,
     thin: Option<std::sync::Arc<katzenpost_thin_client::ThinClient>>,
     rx: &mut mpsc::UnboundedReceiver<Cmd>,
     tell: &impl Fn(Update),
-) {
+) -> Served {
     let c = match Client::open(cfg, backend).await {
         Ok(c) => c,
-        Err(e) => return tell(Update::Stopped(e.to_string())),
+        Err(e) => {
+            tell(Update::Stopped(e.to_string()));
+            return Served::Stopped;
+        }
     };
+    let mut served = Served::Quit;
     let mut events = c.subscribe();
     let mut unacked = Unacked::new();
     for ch in c.chats().await.unwrap_or_default() {
@@ -188,6 +211,7 @@ async fn serve<B: Backend>(
             Some(e) = events.recv() => {
                 if let Some(err) = e.error {
                     tell(Update::Stopped(err));
+                    served = Served::Stopped;
                     break;
                 }
                 if e.removed {
@@ -229,6 +253,7 @@ async fn serve<B: Backend>(
         }
     }
     c.close().await;
+    served
 }
 
 async fn carry_out(c: &Client, cmd: Cmd, unacked: &mut Unacked, tell: &impl Fn(Update)) -> Result<(), ClientError> {
