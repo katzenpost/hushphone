@@ -5,7 +5,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use hushphone::{Actions, AppWindow, Clock, Overlay};
+use hushphone::{Actions, AppState, AppWindow, Clock, Overlay};
 use i_slint_backend_testing::{ElementHandle, mock_elapsed_time};
 use slint::platform::PointerEventButton;
 use slint::{ComponentHandle, LogicalSize};
@@ -59,6 +59,7 @@ fn leaving_waits_longer_than_cancelling() {
     let left = Rc::new(Cell::new(0));
     let l = left.clone();
     ui.global::<Actions>().on_leave(move || l.set(l.get() + 1));
+    ui.global::<AppState>().set_current_joined(true);
     ui.set_overlay(Overlay::ConfirmLeave);
     let leave = button(&ui, "Leave group");
     mock_elapsed_time(Duration::from_millis(600));
@@ -69,6 +70,33 @@ fn leaving_waits_longer_than_cancelling() {
     leave.mock_single_click(PointerEventButton::Left);
     assert_eq!(left.get(), 1);
     assert_eq!(ui.get_overlay(), Overlay::None);
+}
+
+/// A group still joining can be given up from its voucher card: the voucher goes once confirmed.
+#[test]
+fn cancel_joining_from_the_voucher_card() {
+    let ui = window();
+    let cancelled = Rc::new(Cell::new(0));
+    let c = cancelled.clone();
+    ui.global::<Actions>().on_leave(move || c.set(c.get() + 1));
+    let st = ui.global::<AppState>();
+    st.set_current("g".into());
+    st.set_current_name("friends".into());
+    st.set_code("AAAA BBBB".into());
+    mock_elapsed_time(Duration::from_millis(100));
+    let card = button(&ui, "Cancel joining");
+    mock_elapsed_time(Duration::from_millis(600));
+    card.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::ConfirmLeave);
+    assert_eq!(cancelled.get(), 0, "nothing is deleted before it is confirmed");
+    let confirm: Vec<_> = ElementHandle::find_by_accessible_label(&ui, "Cancel joining")
+        .filter(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Button))
+        .collect();
+    let confirm = confirm.last().unwrap();
+    let _ = confirm.absolute_position();
+    mock_elapsed_time(Duration::from_millis(800));
+    confirm.mock_single_click(PointerEventButton::Left);
+    assert_eq!(cancelled.get(), 1);
 }
 
 #[test]
@@ -105,7 +133,7 @@ fn releasing_the_talk_button_sends_after_the_composer_changes() {
     let started = Rc::new(Cell::new(0));
     let stopped = Rc::new(Cell::new(0));
     let (s, t) = (started.clone(), stopped.clone());
-    let st = ui.global::<hushphone::AppState>();
+    let st = ui.global::<AppState>();
     st.set_current("c".into());
     st.set_current_name("friends".into());
     st.set_current_joined(true);

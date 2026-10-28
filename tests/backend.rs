@@ -53,6 +53,9 @@ impl Peer {
                     }
                 }
                 Update::Made(id, _) => self.made = Some(id),
+                Update::Removed(id) => {
+                    self.chats.remove(&id);
+                }
                 Update::Failed(e) | Update::Stopped(e) => panic!("{e}"),
                 _ => {}
             }
@@ -132,4 +135,16 @@ fn two_members_talk_and_send_voice() {
     let (view, lines) = alice.chat(&g).clone();
     let items = model::line_items(&lines, &model::names(&view, &Settings::default(), "alice"), &Files::default(), &Default::default(), chrono::Local::now());
     assert!(items.iter().any(|i| i.mine && i.delivery == Delivery::Read));
+}
+
+/// Cancelling a join deletes the group and its voucher.
+#[test]
+fn cancel_joining() {
+    let w = World::default();
+    let mut dana = Peer::new(&w, "dana");
+    dana.cmd.send(Cmd::Join("friends".into(), 1)).unwrap();
+    dana.wait("a voucher code", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| !c.0.code.is_empty())));
+    let id = dana.made.clone().unwrap();
+    dana.cmd.send(Cmd::Leave(id.clone())).unwrap();
+    dana.wait("the group to go", |p| !p.chats.contains_key(&id));
 }

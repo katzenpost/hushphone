@@ -446,9 +446,8 @@ impl App {
             }
             Update::Failed(e) => self.notice(&e, true),
             Update::Stopped(e) => {
-                self.cmd = None;
                 self.state(|s| s.set_connection(Connection::Unreachable));
-                self.notice(&format!("The client stopped: {e}. Restart hushphone."), true);
+                self.notice(&format!("The client stopped: {e}. Opening it again."), true);
             }
         }
     }
