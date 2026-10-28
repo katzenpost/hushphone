@@ -487,6 +487,7 @@ component Card inherits Rectangle {
 // The code is a direct child of the layout, so it is measured at the card's width; its background
 // follows its bounds.
 component VoucherCard inherits Card {
+    callback cancel();
     height: lay.preferred-height;
     Rectangle {
         x: code.x - Theme.s3;
@@ -520,6 +521,7 @@ component VoucherCard inherits Card {
         Rectangle { height: Theme.s2; }
         HorizontalLayout {
             alignment: start;
+            spacing: Theme.s3;
             Button {
                 text: "Copy code";
                 icon: @image-url("icons/copy.svg");
@@ -527,11 +529,16 @@ component VoucherCard inherits Card {
                 primary: true;
                 activated => { Actions.copy-code(); }
             }
+            Button {
+                text: "Cancel joining";
+                activated => { root.cancel(); }
+            }
         }
     }
 }
 
 component JoiningPanel {
+    callback cancel();
     // Each card is placed by hand at a known width, so its wrapped text is measured at that width.
     if AppState.minting: minting := Card {
         width: min(520px, root.width - 2 * Theme.s4);
@@ -554,9 +561,17 @@ component JoiningPanel {
                 Hint { text: "Minting a voucher over the mixnet. This can take a minute."; vertical-alignment: center; }
             }
             if AppState.joining-note != "": Hint { text: AppState.joining-note; color: Theme.warn; }
+            HorizontalLayout {
+                alignment: start;
+                Button {
+                    text: "Cancel joining";
+                    activated => { root.cancel(); }
+                }
+            }
         }
     }
     if !AppState.minting: VoucherCard {
+        cancel => { root.cancel(); }
         width: min(520px, root.width - 2 * Theme.s4);
         x: (root.width - self.width) / 2;
         y: max(Theme.s4, (root.height - self.height) / 2);
@@ -631,7 +646,10 @@ component Conversation inherits Rectangle {
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.divider; }
         }
 
-        if !AppState.current-joined: JoiningPanel { vertical-stretch: 1; }
+        if !AppState.current-joined: JoiningPanel {
+            vertical-stretch: 1;
+            cancel => { root.leave(); }
+        }
 
         if AppState.current-joined: messages := ListView {
             vertical-stretch: 1;
@@ -682,13 +700,13 @@ component Conversation inherits Rectangle {
                     icon: @image-url("icons/search.svg");
                     activated => { more.close(); Actions.scan(); }
                 }
-                MenuEntry {
+                if AppState.current-joined: MenuEntry {
                     text: "Clear history";
                     icon: @image-url("icons/close.svg");
                     activated => { more.close(); root.clear(); }
                 }
                 MenuEntry {
-                    text: "Leave group";
+                    text: AppState.current-joined ? "Leave group" : "Cancel joining";
                     icon: @image-url("icons/join.svg");
                     danger: true;
                     activated => { more.close(); root.leave(); }
@@ -1106,9 +1124,11 @@ export component AppWindow inherits Window {
                 dismissed => { root.overlay = Overlay.none; }
             }
             if root.overlay == Overlay.confirm-leave: ConfirmDialog {
-                title: "Leave " + AppState.current-name + "?";
-                body: "You stop reading and writing this group, and it is removed from this device with its history. Others keep their copies. To come back, someone must add you again.";
-                action: "Leave group";
+                title: (AppState.current-joined ? "Leave " : "Cancel joining ") + AppState.current-name + "?";
+                body: AppState.current-joined
+                    ? "You stop reading and writing this group, and it is removed from this device with its history. Others keep their copies. To come back, someone must add you again."
+                    : "The voucher is deleted from this device. If someone adds its code later, you will not join; to join, make a new voucher.";
+                action: AppState.current-joined ? "Leave group" : "Cancel joining";
                 dismissed => { root.overlay = Overlay.none; }
                 confirmed => {
                     Actions.leave();
