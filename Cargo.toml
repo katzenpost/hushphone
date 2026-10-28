@@ -36,6 +36,10 @@ unicode-normalization = "0.1"
 infer = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+seccompiler = "0.5"
+libc = "0.2"
+
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "7"
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }

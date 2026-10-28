@@ -7,6 +7,8 @@ pub mod backend;
 pub mod bridge;
 pub mod effects;
 pub mod model;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub mod sandbox;
 pub mod settings;
 pub mod text;
 pub mod voice;

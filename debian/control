@@ -3,6 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Katzenpost <packages@katzenpost.network>
 Build-Depends: debhelper-compat (= 13),
+               dh-apparmor,
                libasound2-dev,
                libfontconfig-dev,
                pkg-config
@@ -27,10 +28,13 @@ Depends: ${shlibs:Depends},
          libxkbcommon0
 Recommends: katzenpost,
             xdg-desktop-portal
+Suggests: apparmor
 Description: group chat with push-to-talk voice over the Katzenpost mixnet
  hushphone is a group chat client for the Katzenpost mix network, with
  push-to-talk voice messages. Its groups are shared with katzenqt, jam and
  frank_chat.
  .
  It does no networking of its own: it talks to a running Katzenpost client
- daemon, kpclientd, over its socket.
+ daemon, kpclientd, over its socket. An AppArmor profile, and a seccomp filter
+ the program puts on itself, leave it no IP sockets and no way to start other
+ programs.

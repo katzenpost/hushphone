@@ -66,6 +66,9 @@ struct App {
     line_model: Rc<VecModel<LineItem>>,
     member_model: Rc<VecModel<MemberItem>>,
     timer: slint::Timer,
+    /// The sockets the sandbox allows, once it is on.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    net: Option<crate::sandbox::Net>,
 }
 
 thread_local! {
@@ -133,6 +136,8 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         line_model,
         member_model,
         timer: slint::Timer::default(),
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        net: None,
     };
     APP.with(|a| *a.borrow_mut() = Some(app));
     wire(ui);
@@ -234,6 +239,10 @@ fn wire(ui: &AppWindow) {
     a.on_save_settings(|daemon| {
         with_app(|app| {
             app.settings.daemon = daemon.trim().to_string();
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            if app.net.is_some_and(|n| !n.allows(crate::sandbox::Net::for_daemon(&app.settings.daemon))) {
+                app.notice("This app may only reach kpclientd over a unix socket until it restarts.", true);
+            }
             if let Some(ui) = app.ui.upgrade() {
                 app.settings.theme = match ui.global::<Theme>().get_preference() {
                     ThemePreference::Light => ThemeChoice::Light,
@@ -366,6 +375,18 @@ impl App {
             Source::Daemon(a) if a.is_empty() => Source::Daemon(self.settings.daemon.clone()),
             s => s.clone(),
         };
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        if self.net.is_none() {
+            use crate::sandbox::{self, Net};
+            let net = match &source {
+                Source::Daemon(a) => Net::for_daemon(a),
+                _ => Net::Unix,
+            };
+            if let Err(e) = sandbox::enter(net) {
+                self.notice(&format!("Couldn't sandbox the app: {e}"), true);
+            }
+            self.net = Some(net);
+        }
         let params = backend::Params {
             source,
             state_dir: self.setup.data_dir.join("state"),
