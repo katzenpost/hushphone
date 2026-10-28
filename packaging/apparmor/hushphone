@@ -26,10 +26,11 @@ profile hushphone /usr/bin/hushphone {
   unix,
   dbus bus=session,
   owner /run/user/[0-9]*/bus rw,
-  deny network inet,
-  deny network inet6,
-  deny network raw,
-  deny network packet,
+  # Refused and logged: nothing in hushphone should ever try.
+  audit deny network inet,
+  audit deny network inet6,
+  audit deny network raw,
+  audit deny network packet,
 
   /usr/bin/hushphone mr,
 
