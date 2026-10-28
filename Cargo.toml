@@ -19,10 +19,10 @@ path = "src/main.rs"
 
 [dependencies]
 slint = "=1.18.1"
-pigeonhole-katzenqt1-client = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
-pigeonhole-katzenqt1-engine = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
-pigeonhole-transport = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
-pigeonhole-transport-thinclient = { git = "https://github.com/katzenpost/pigeonhole", rev = "0bf5946c141355130fcd084df57c8545f2280812" }
+pigeonhole-katzenqt1-client = { git = "https://github.com/katzenpost/pigeonhole", rev = "3b1aab840cc6bc04a872fb73847ea34aa61c6a0d" }
+pigeonhole-katzenqt1-engine = { git = "https://github.com/katzenpost/pigeonhole", rev = "3b1aab840cc6bc04a872fb73847ea34aa61c6a0d" }
+pigeonhole-transport = { git = "https://github.com/katzenpost/pigeonhole", rev = "3b1aab840cc6bc04a872fb73847ea34aa61c6a0d" }
+pigeonhole-transport-thinclient = { git = "https://github.com/katzenpost/pigeonhole", rev = "3b1aab840cc6bc04a872fb73847ea34aa61c6a0d" }
 katzenpost_thin_client = "=0.0.25"
 rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "533a72647143ecbbf22038dcab82ad3cc2ae537b" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }

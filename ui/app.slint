@@ -506,7 +506,8 @@ component VoucherCard inherits Card {
             font-weight: 700;
             overflow: elide;
         }
-        Hint { text: "Give this voucher code to someone already in the group, over a channel you trust. When they add it, you join."; }
+        Hint { text: "Give this voucher code to someone already in the group, over a channel you trust. When they add it, you join. You can leave this page meanwhile."; }
+        if AppState.joining-note != "": Hint { text: AppState.joining-note; color: Theme.warn; }
         Rectangle { height: Theme.s2; }
         code := Text {
             text: AppState.code;
@@ -552,6 +553,7 @@ component JoiningPanel {
                 Spinner { indeterminate: true; width: 24px; height: 24px; }
                 Hint { text: "Minting a voucher over the mixnet. This can take a minute."; vertical-alignment: center; }
             }
+            if AppState.joining-note != "": Hint { text: AppState.joining-note; color: Theme.warn; }
         }
     }
     if !AppState.minting: VoucherCard {

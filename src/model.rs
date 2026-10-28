@@ -84,6 +84,17 @@ pub fn notice_text(n: &Notice) -> String {
     }
 }
 
+/// The latest failure in a group still joining, for its joining page; empty if there is none.
+pub fn joining_note(lines: &[LineView]) -> String {
+    lines
+        .iter()
+        .rev()
+        .filter_map(|l| l.line.notice.as_ref())
+        .find(|n| matches!(n.kind, NoticeKind::ActionFailed | NoticeKind::ReplyUnreadable))
+        .map(notice_text)
+        .unwrap_or_default()
+}
+
 pub fn line_item(
     l: &LineView,
     prev: Option<&LineView>,
@@ -258,6 +269,15 @@ mod tests {
 
     fn now() -> DateTime<Local> {
         Local.timestamp_millis_opt(1_800_000_000_000).unwrap()
+    }
+
+    #[test]
+    fn joining_shows_only_failures() {
+        let mut l = vec![line(0, 0, "", 0), line(1, 0, "", 0)];
+        l[0].line.notice = Some(Notice { kind: NoticeKind::ActionFailed, args: vec!["read timed out".into()] });
+        l[1].line.notice = Some(Notice { kind: NoticeKind::VoucherMinted, args: vec![] });
+        assert!(joining_note(&l).contains("read timed out"));
+        assert_eq!(joining_note(&l[1..]), "");
     }
 
     #[test]
