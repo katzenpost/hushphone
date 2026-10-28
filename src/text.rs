@@ -58,7 +58,29 @@ pub fn body(s: &str) -> (String, bool) {
         out.push_str("\n[… cut: the message was longer than 64 KiB]");
     }
     let long = out.lines().count() > LINES_MAX;
-    (out, long)
+    (breakable(&out), long)
+}
+
+/// A run of this many characters without a space gets a place to break, so that one long word
+/// cannot make its bubble wider than the screen.
+const RUN_MAX: usize = 24;
+
+fn breakable(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut run = 0;
+    for g in s.graphemes(true) {
+        if g.chars().all(char::is_whitespace) {
+            run = 0;
+        } else {
+            run += 1;
+            if run > RUN_MAX {
+                out.push('\u{200B}');
+                run = 1;
+            }
+        }
+        out.push_str(g);
+    }
+    out
 }
 
 /// The first `LINES_MAX` lines of a long body.
@@ -129,9 +151,18 @@ mod tests {
         assert_eq!(body("a\nb\u{1b}[31m").0, "a\nb\u{FFFD}[31m");
         assert!(!body("short").1);
         assert!(body(&"l\n".repeat(30)).1);
-        let (big, _) = body(&"é".repeat(BODY_MAX));
+        let (big, _) = body(&"é ".repeat(BODY_MAX));
         assert!(big.len() < BODY_MAX + 100);
         assert!(big.ends_with("64 KiB]"));
+    }
+
+    #[test]
+    fn long_words_get_places_to_break() {
+        let (b, _) = body(&"x".repeat(60));
+        assert_eq!(b.matches('\u{200B}').count(), 2);
+        assert_eq!(body("short words stay as they are").0, "short words stay as they are");
+        let (f, _) = body(&"👩‍👩‍👧".repeat(30));
+        assert!(f.split('\u{200B}').all(|p| p.graphemes(true).count() <= RUN_MAX), "breaks fall between graphemes");
     }
 
     #[test]

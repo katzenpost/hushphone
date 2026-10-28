@@ -582,6 +582,7 @@ impl App {
             Ok(()) => {
                 self.recording_for = Some(chat);
                 self.state(|s| {
+                    s.set_notice("".into());
                     s.set_recording(true);
                     s.set_record_time("0:00".into());
                 });

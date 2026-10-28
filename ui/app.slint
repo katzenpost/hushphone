@@ -333,7 +333,8 @@ component PttButton {
 component Composer inherits Rectangle {
     background: Theme.surface;
     private property <string> draft;
-    min-height: lay.preferred-height;
+    height: lay.preferred-height;
+    vertical-stretch: 0;
 
     function send() {
         if (root.draft.is-empty) { return; }
@@ -344,14 +345,15 @@ component Composer inherits Rectangle {
     lay := VerticalLayout {
         Rectangle { height: 1px; background: Theme.divider; }
 
-        if AppState.recording: HorizontalLayout {
+        HorizontalLayout {
             padding: Theme.s3;
-            padding-left: Theme.s4;
-            spacing: Theme.s3;
-            height: 72px;
-            // The microphone indicator: shown for exactly as long as capture runs.
-            VerticalLayout {
+            padding-left: AppState.recording ? Theme.s4 : Theme.s3;
+            spacing: AppState.recording ? Theme.s3 : Theme.s2;
+            min-height: 72px;
+
+            if AppState.recording: VerticalLayout {
                 alignment: center;
+                // The microphone indicator: shown for exactly as long as capture runs.
                 Rectangle {
                     width: 12px;
                     height: 12px;
@@ -360,7 +362,7 @@ component Composer inherits Rectangle {
                     opacity: 0.55 + 0.45 * sin(animation-tick() / 500ms * 360deg);
                 }
             }
-            VerticalLayout {
+            if AppState.recording: VerticalLayout {
                 alignment: center;
                 horizontal-stretch: 1;
                 Text {
@@ -376,7 +378,7 @@ component Composer inherits Rectangle {
                     overflow: elide;
                 }
             }
-            VerticalLayout {
+            if AppState.recording: VerticalLayout {
                 alignment: center;
                 IconButton {
                     icon: @image-url("icons/close.svg");
@@ -384,24 +386,18 @@ component Composer inherits Rectangle {
                     activated => { Actions.ptt-cancel(); }
                 }
             }
-            VerticalLayout {
-                alignment: center;
-                PttButton { }
-            }
-        }
 
-        if !AppState.recording: HorizontalLayout {
-            padding: Theme.s3;
-            spacing: Theme.s2;
-            alignment: stretch;
-            IconButton {
-                y: parent.height - self.height - Theme.s3 - 4px;
-                icon: @image-url("icons/paperclip.svg");
-                label: "Attach a file for " + AppState.current-name;
-                enabled: AppState.current-joined;
-                activated => { Actions.attach-file(); }
+            if !AppState.recording: VerticalLayout {
+                alignment: end;
+                padding-bottom: 18px;
+                IconButton {
+                    icon: @image-url("icons/paperclip.svg");
+                    label: "Attach a file for " + AppState.current-name;
+                    enabled: AppState.current-joined;
+                    activated => { Actions.attach-file(); }
+                }
             }
-            VerticalLayout {
+            if !AppState.recording: VerticalLayout {
                 horizontal-stretch: 1;
                 spacing: 2px;
                 Rectangle {
@@ -451,21 +447,30 @@ component Composer inherits Rectangle {
                     overflow: elide;
                 }
             }
-            if root.draft.is-empty: PttButton { y: (parent.height - self.height) / 2 - 6px; }
-            if !root.draft.is-empty: Rectangle {
-                width: 48px;
-                height: 48px;
-                y: (parent.height - self.height) / 2 - 6px;
-                border-radius: 24px;
-                background: send-touch.has-hover ? Theme.accent-hover : Theme.accent;
-                accessible-role: button;
-                accessible-label: "Send to " + AppState.current-name;
-                accessible-action-default => { if (send-stable.ready()) { root.send(); } }
-                send-stable := Stable { at: parent.absolute-position; }
-                Icon { icon: @image-url("icons/send.svg"); tint: Theme.on-accent; size: 20px; }
-                send-touch := TouchArea {
-                    mouse-cursor: pointer;
-                    clicked => { if (send-stable.ready()) { root.send(); } }
+
+            // One talk button for both states, so the release reaches the button that saw the press.
+            if root.draft.is-empty: VerticalLayout {
+                alignment: center;
+                padding-bottom: AppState.recording ? 0 : 12px;
+                PttButton { }
+            }
+            if !root.draft.is-empty: VerticalLayout {
+                alignment: center;
+                padding-bottom: 12px;
+                Rectangle {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 24px;
+                    background: send-touch.has-hover ? Theme.accent-hover : Theme.accent;
+                    accessible-role: button;
+                    accessible-label: "Send to " + AppState.current-name;
+                    accessible-action-default => { if (send-stable.ready()) { root.send(); } }
+                    send-stable := Stable { at: parent.absolute-position; }
+                    Icon { icon: @image-url("icons/send.svg"); tint: Theme.on-accent; size: 20px; }
+                    send-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { if (send-stable.ready()) { root.send(); } }
+                    }
                 }
             }
         }

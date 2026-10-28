@@ -5,6 +5,8 @@ use jni::objects::{JObject, JValue};
 use slint::android::AndroidApp;
 use slint::android::android_activity::WindowManagerFlags;
 
+use std::sync::OnceLock;
+
 use crate::backend::Source;
 use crate::bridge::UserIntent;
 
@@ -12,8 +14,12 @@ use crate::bridge::UserIntent;
 const DAEMON: &str = "127.0.0.1:64331";
 const RECORD_AUDIO: &str = "android.permission.RECORD_AUDIO";
 
+/// The app, for its activity: a permission request needs the activity, not the application.
+static APP: OnceLock<AndroidApp> = OnceLock::new();
+
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
+    let _ = APP.set(app.clone());
     // Keep every window out of screenshots, screen recording and the recent-apps thumbnails.
     // Only test builds, made to take screenshots of, leave this out.
     if !cfg!(feature = "test-screenshots") {
@@ -34,10 +40,10 @@ fn android_main(app: AndroidApp) {
 }
 
 fn with_activity<T>(f: impl FnOnce(&mut jni::JNIEnv, &JObject) -> jni::errors::Result<T>) -> Result<T, String> {
-    let ctx = ndk_context::android_context();
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| e.to_string())?;
+    let app = APP.get().ok_or("no activity")?;
+    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }.map_err(|e| e.to_string())?;
     let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
-    let activity = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let activity = unsafe { JObject::from_raw(app.activity_as_ptr().cast()) };
     let r = f(&mut env, &activity);
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_describe();

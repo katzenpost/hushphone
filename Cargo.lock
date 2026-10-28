@@ -2219,7 +2219,6 @@ dependencies = [
  "infer",
  "jni 0.21.1",
  "katzenpost_thin_client",
- "ndk-context",
  "pigeonhole-katzenqt1-client",
  "pigeonhole-katzenqt1-engine",
  "pigeonhole-transport",
