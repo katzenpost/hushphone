@@ -12,15 +12,15 @@ include <tunables/global>
 
 profile hushphone /usr/bin/hushphone {
   include <abstractions/base>
-  include <abstractions/audio>
-  include <abstractions/dri-enumerate>
-  include <abstractions/fonts>
-  include <abstractions/freedesktop.org>
-  include <abstractions/mesa>
-  include <abstractions/nameservice-strict>
-  include <abstractions/user-download>
-  include <abstractions/wayland>
-  include <abstractions/X>
+  include if exists <abstractions/audio>
+  include if exists <abstractions/dri-enumerate>
+  include if exists <abstractions/fonts>
+  include if exists <abstractions/freedesktop.org>
+  include if exists <abstractions/mesa>
+  include if exists <abstractions/nameservice-strict>
+  include if exists <abstractions/user-download>
+  include if exists <abstractions/wayland>
+  include if exists <abstractions/X>
 
   # kpclientd's socket, the display, the session bus and the sound server.
   unix,
