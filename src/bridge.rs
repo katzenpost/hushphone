@@ -404,7 +404,8 @@ impl App {
             Update::Chat { view, from, lines, dropped, paths } => {
                 let id = view.id.clone();
                 self.paths.extend(paths);
-                let c = self.chats.entry(id.clone()).or_default();
+                let seen = self.settings.seen.get(&id).copied().unwrap_or(0);
+                let c = self.chats.entry(id.clone()).or_insert_with(|| ChatState { seen, ..Default::default() });
                 c.view = Some(view);
                 if from != usize::MAX {
                     c.lines.retain(|l| l.line.id < from && !dropped.contains(&l.line.id));
@@ -414,6 +415,7 @@ impl App {
                 }
                 if self.current.as_deref() == Some(id.as_str()) {
                     c.seen = c.lines.last().map_or(0, |l| l.line.id);
+                    self.remember_seen(&id);
                 }
                 self.learn_files(&id);
                 self.render_chats();
@@ -423,6 +425,9 @@ impl App {
             }
             Update::Removed(id) => {
                 self.chats.remove(&id);
+                if self.settings.seen.remove(&id).is_some() {
+                    let _ = self.settings.save(&self.setup.data_dir);
+                }
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.current = None;
                     if let Some(ui) = self.ui.upgrade() {
@@ -479,8 +484,17 @@ impl App {
         if let Some(c) = self.chats.get_mut(&id) {
             c.seen = c.lines.last().map_or(0, |l| l.line.id);
         }
+        self.remember_seen(&id);
         self.current = Some(id);
         self.render_all();
+    }
+
+    fn remember_seen(&mut self, id: &str) {
+        let Some(seen) = self.chats.get(id).map(|c| c.seen) else { return };
+        if self.settings.seen.get(id) != Some(&seen) {
+            self.settings.seen.insert(id.to_string(), seen);
+            let _ = self.settings.save(&self.setup.data_dir);
+        }
     }
 
     fn attachment(&self, line: usize) -> Option<(PathBuf, String)> {

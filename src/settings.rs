@@ -23,6 +23,8 @@ pub struct Settings {
     pub theme: ThemeChoice,
     /// Our own names for members, by the hex of their key.
     pub petnames: BTreeMap<String, String>,
+    /// The last line read in each group, so unread counts survive a restart.
+    pub seen: BTreeMap<String, usize>,
 }
 
 impl Settings {
