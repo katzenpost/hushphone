@@ -13,6 +13,6 @@ deb https://snapshot.ubuntu.com/ubuntu/$snapshot jammy-security main universe
 EOF
 apt-get -o Acquire::Check-Valid-Until=false update
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    curl git gcc libc6-dev pkg-config libasound2-dev libfontconfig1-dev
+    curl git gcc make libc6-dev pkg-config libasound2-dev libfontconfig1-dev
 curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none --profile minimal
 git config --global --add safe.directory '*'

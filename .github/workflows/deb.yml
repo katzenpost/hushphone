@@ -30,11 +30,7 @@ jobs:
         distro: [debian-13, ubuntu-24.04]
     steps:
       - uses: actions/checkout@v5
-      - run: make deb-image DISTRO=${{ matrix.distro }} PODMAN=docker
-      - name: Build, install, test and rebuild
-        run: |
-          docker run --rm -v "$PWD":/build -w /build \
-            "$(make -s deb-image-ref DISTRO=${{ matrix.distro }})" make deb-ci
+      - run: make deb-ci-image DISTRO=${{ matrix.distro }} PODMAN=docker
       - uses: actions/upload-artifact@v5
         with:
           name: deb-${{ matrix.distro }}

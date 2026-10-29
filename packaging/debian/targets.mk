@@ -3,7 +3,7 @@ DISTRO ?= debian-13
 DEB_DISTROS ?= debian-13 ubuntu-24.04
 DEB_IMAGE = packaging/container/deb-image.sh
 
-.PHONY: deb deb-build deb-ci deb-test deb-image-ref deb-image \
+.PHONY: deb deb-build deb-ci deb-ci-image deb-test deb-image-ref deb-image \
 	deb-image-push deb-image-refs
 
 # The package, built in the build image for $(DISTRO), into dist/.
@@ -18,6 +18,11 @@ deb-build:
 # Build, install and test the package, and check that a second build is the same.
 deb-ci:
 	@packaging/debian/ci.sh
+
+# deb-ci, in the build image for $(DISTRO).
+deb-ci-image: deb-image
+	@$(PODMAN) run --rm -v "$(CURDIR)":/build:z -w /build \
+		"$$($(DEB_IMAGE) --ref $(DISTRO))" make deb-ci
 
 deb-test:
 	@packaging/debian/test.sh
