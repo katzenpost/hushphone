@@ -19,9 +19,9 @@ path = "src/main.rs"
 
 [dependencies]
 slint = "=1.18.1"
-pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "35f54fd9bec17ae8b3aba8897995170c537271fb" }
+pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "b5991f44ccf97e83d555262eed626c86b330a286" }
 katzenpost_thin_client = "=0.0.25"
-rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "533a72647143ecbbf22038dcab82ad3cc2ae537b" }
+rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "f69c020d0df6253178e74f244db67292177c3940" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 futures-util = "0.3"
 sha2 = "0.10"
@@ -33,6 +33,8 @@ unicode-segmentation = "1.13"
 unicode-normalization = "0.1"
 infer = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rand = "0.8"
+zeroize = "1"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 seccompiler = "0.5"
@@ -43,6 +45,7 @@ dirs = "7"
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "wayland"] }
 arboard = { version = "3.7", features = ["wayland-data-control"] }
 ashpd = { version = "0.13", default-features = false, features = ["tokio", "open_uri"] }
+oo7 = { version = "0.6", default-features = false, features = ["tokio", "native_crypto"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 slint = { version = "=1.18.1", features = ["backend-android-activity-06"] }
@@ -85,3 +88,4 @@ launch_mode = "singleTop"
 # release would not be reproducible.
 [profile.release]
 codegen-units = 1
+
