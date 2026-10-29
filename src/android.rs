@@ -46,6 +46,7 @@ fn android_main(app: AndroidApp) {
         default_daemon: relay.to_string_lossy().into_owned(),
         name: None,
         old_defaults: vec![OLD_DAEMON.into()],
+        keys: crate::backend::Keys::System,
     };
     if let Err(e) = crate::run(setup) {
         eprintln!("hushphone: {e}");
@@ -305,4 +306,150 @@ fn private_dir(app: &AndroidApp) -> PathBuf {
     }
     let _ = std::fs::remove_file(files.join("kpclientd.sock"));
     dir
+}
+
+/// The Keystore's name for the key that wraps the state's key.
+const STATE_KEY: &str = "hushphone-state";
+
+/// The Keystore's AES key that wraps the state's key, made if `make` and there is none. It never
+/// leaves the Keystore: in StrongBox where the phone has one, else in its TEE.
+fn keystore_key<'a>(env: &mut jni::JNIEnv<'a>, make: bool) -> jni::errors::Result<Option<JObject<'a>>> {
+    let kind = env.new_string("AndroidKeyStore")?;
+    let ks = env
+        .call_static_method("java/security/KeyStore", "getInstance", "(Ljava/lang/String;)Ljava/security/KeyStore;", &[JValue::Object(&kind)])?
+        .l()?;
+    env.call_method(&ks, "load", "(Ljava/security/KeyStore$LoadStoreParameter;)V", &[JValue::Object(&JObject::null())])?;
+    let alias = env.new_string(STATE_KEY)?;
+    let key = env
+        .call_method(&ks, "getKey", "(Ljava/lang/String;[C)Ljava/security/Key;", &[JValue::Object(&alias), JValue::Object(&JObject::null())])?
+        .l()?;
+    if !key.is_null() || !make {
+        return Ok((!key.is_null()).then_some(key));
+    }
+    // Not every phone has StrongBox, nor a lock screen to require; the next best is tried.
+    let mut last = None;
+    for (strongbox, unlocked) in [(true, true), (false, true), (false, false)] {
+        match generate_key(env, strongbox, unlocked) {
+            Ok(k) => return Ok(Some(k)),
+            Err(e) => {
+                if env.exception_check()? {
+                    env.exception_clear()?;
+                }
+                last = Some(e);
+            }
+        }
+    }
+    Err(last.unwrap())
+}
+
+fn generate_key<'a>(env: &mut jni::JNIEnv<'a>, strongbox: bool, unlocked: bool) -> jni::errors::Result<JObject<'a>> {
+    const BUILDER: &str = "android/security/keystore/KeyGenParameterSpec$Builder";
+    const RETURNS: &str = "Landroid/security/keystore/KeyGenParameterSpec$Builder;";
+    let alias = env.new_string(STATE_KEY)?;
+    // PURPOSE_ENCRYPT | PURPOSE_DECRYPT
+    let b = env.new_object(BUILDER, "(Ljava/lang/String;I)V", &[JValue::Object(&alias), JValue::Int(3)])?;
+    let gcm = env.new_string("GCM")?;
+    let modes = env.new_object_array(1, "java/lang/String", &gcm)?;
+    env.call_method(&b, "setBlockModes", format!("([Ljava/lang/String;){RETURNS}"), &[JValue::Object(&modes)])?;
+    let none = env.new_string("NoPadding")?;
+    let paddings = env.new_object_array(1, "java/lang/String", &none)?;
+    env.call_method(&b, "setEncryptionPaddings", format!("([Ljava/lang/String;){RETURNS}"), &[JValue::Object(&paddings)])?;
+    env.call_method(&b, "setKeySize", format!("(I){RETURNS}"), &[JValue::Int(256)])?;
+    if unlocked {
+        env.call_method(&b, "setUnlockedDeviceRequired", format!("(Z){RETURNS}"), &[JValue::Bool(1)])?;
+    }
+    if strongbox {
+        env.call_method(&b, "setIsStrongBoxBacked", format!("(Z){RETURNS}"), &[JValue::Bool(1)])?;
+    }
+    let spec = env.call_method(&b, "build", "()Landroid/security/keystore/KeyGenParameterSpec;", &[])?.l()?;
+    let (aes, provider) = (env.new_string("AES")?, env.new_string("AndroidKeyStore")?);
+    let kg = env
+        .call_static_method(
+            "javax/crypto/KeyGenerator",
+            "getInstance",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljavax/crypto/KeyGenerator;",
+            &[JValue::Object(&aes), JValue::Object(&provider)],
+        )?
+        .l()?;
+    env.call_method(&kg, "init", "(Ljava/security/spec/AlgorithmParameterSpec;)V", &[JValue::Object(&spec)])?;
+    env.call_method(&kg, "generateKey", "()Ljavax/crypto/SecretKey;", &[])?.l()
+}
+
+/// AES-GCM through the Keystore's key: `iv` given to decrypt, made by the Keystore to encrypt.
+fn keystore_cipher<'a>(env: &mut jni::JNIEnv<'a>, key: &JObject, iv: Option<&[u8]>) -> jni::errors::Result<JObject<'a>> {
+    let name = env.new_string("AES/GCM/NoPadding")?;
+    let c = env
+        .call_static_method("javax/crypto/Cipher", "getInstance", "(Ljava/lang/String;)Ljavax/crypto/Cipher;", &[JValue::Object(&name)])?
+        .l()?;
+    match iv {
+        None => {
+            env.call_method(&c, "init", "(ILjava/security/Key;)V", &[JValue::Int(1), JValue::Object(key)])?;
+        }
+        Some(iv) => {
+            let iv = env.byte_array_from_slice(iv)?;
+            let spec = env.new_object("javax/crypto/spec/GCMParameterSpec", "(I[B)V", &[JValue::Int(128), JValue::Object(&iv)])?;
+            env.call_method(
+                &c,
+                "init",
+                "(ILjava/security/Key;Ljava/security/spec/AlgorithmParameterSpec;)V",
+                &[JValue::Int(2), JValue::Object(key), JValue::Object(&spec)],
+            )?;
+        }
+    }
+    Ok(c)
+}
+
+/// Run `input` through the cipher, and wipe the Java copies of it and of what comes out.
+fn through<'a>(env: &mut jni::JNIEnv<'a>, c: &JObject, input: &[u8]) -> jni::errors::Result<zeroize::Zeroizing<Vec<u8>>> {
+    let input = env.byte_array_from_slice(input)?;
+    let out: jni::objects::JByteArray = env.call_method(c, "doFinal", "([B)[B", &[JValue::Object(&input)])?.l()?.into();
+    let bytes = zeroize::Zeroizing::new(env.convert_byte_array(&out)?);
+    env.call_static_method("java/util/Arrays", "fill", "([BB)V", &[JValue::Object(&out), JValue::Byte(0)])?;
+    env.call_static_method("java/util/Arrays", "fill", "([BB)V", &[JValue::Object(&input), JValue::Byte(0)])?;
+    Ok(bytes)
+}
+
+/// Wrap the state's key with the Keystore's, and keep it in `file`: the IV's length, the IV, and
+/// the wrapped key.
+pub fn wrap_state_key(file: &std::path::Path, key: &[u8]) -> Result<(), String> {
+    let kept = with_activity(|env, _| {
+        let k = keystore_key(env, true)?.expect("made");
+        let c = keystore_cipher(env, &k, None)?;
+        let iv: jni::objects::JByteArray = env.call_method(&c, "getIV", "()[B", &[])?.l()?.into();
+        let iv = env.convert_byte_array(&iv)?;
+        let wrapped = through(env, &c, key)?;
+        let mut out = vec![iv.len() as u8];
+        out.extend(&iv);
+        out.extend(wrapped.iter());
+        Ok(out)
+    })
+    .map_err(|e| format!("the Android Keystore refused to keep a key: {e}"))?;
+    let tmp = file.with_extension("tmp");
+    crate::settings::open_private(&tmp)
+        .and_then(|mut f| {
+            use std::io::Write;
+            f.write_all(&kept)?;
+            f.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&tmp, file))
+        .map_err(|e| e.to_string())
+}
+
+/// The state's key kept in `file`, unwrapped by the Keystore; `None` if none is kept.
+pub fn unwrap_state_key(file: &std::path::Path) -> Result<Option<pigeonhole_protocols::secret::Secret>, String> {
+    let kept = match std::fs::read(file) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
+    let n = *kept.first().ok_or("the kept key is empty")? as usize;
+    let (iv, wrapped) = kept[1..].split_at_checked(n).ok_or("the kept key is cut short")?;
+    let key = with_activity(|env, _| {
+        let Some(k) = keystore_key(env, false)? else { return Ok(None) };
+        let c = keystore_cipher(env, &k, Some(iv))?;
+        through(env, &c, wrapped).map(Some)
+    })
+    .map_err(|e| format!("the Android Keystore would not unwrap the key: {e}"))?
+    .ok_or("the Android Keystore no longer has hushphone's key")?;
+    Ok(Some(pigeonhole_protocols::secret::Secret::new(&key)))
 }

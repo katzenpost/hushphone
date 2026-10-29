@@ -5,12 +5,13 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use hushphone::backend::{self, Cmd, Params, Source, Update};
+use hushphone::backend::{self, Attachments, Cmd, Keys, Params, Source, Update};
 use hushphone::model::{self, Files};
 use hushphone::settings::Settings;
 use hushphone::voice;
 use hushphone::{Delivery, LineKind};
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
+use pigeonhole_protocols::secret::Secret;
 use pigeonhole_protocols::transport::sim::World;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -19,6 +20,8 @@ struct Peer {
     rx: mpsc::Receiver<Update>,
     chats: std::collections::HashMap<String, (ChatView, Vec<LineView>)>,
     paths: std::collections::HashMap<String, PathBuf>,
+    attachments: Option<Attachments>,
+    locked: Option<String>,
     made: Option<String>,
 }
 
@@ -28,16 +31,35 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
+/// Wait for the client that had the state in `dir` to let it go.
+fn released(dir: &Path) {
+    use pigeonhole_protocols::protocols::katzenqt1::client::store::{Options, Store, StoreError};
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while let Err(StoreError::Other(e)) = Store::open(dir, Options::default()) {
+        assert!(Instant::now() < deadline, "the state stays open: {e}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 impl Peer {
     fn new(w: &World, name: &str) -> Peer {
+        Peer::open(w, name, dir(name), Keys::None)
+    }
+
+    fn open(w: &World, name: &str, state_dir: PathBuf, keys: Keys) -> Peer {
         let (tx, rx) = mpsc::channel();
-        let cmd = backend::spawn(
-            Params { source: Source::Memory(w.clone()), state_dir: dir(name), name: name.into() },
-            move |u| {
-                let _ = tx.send(u);
-            },
-        );
-        Peer { cmd, rx, chats: Default::default(), paths: Default::default(), made: None }
+        let cmd = backend::spawn(Params { source: Source::Memory(w.clone()), state_dir, name: name.into(), keys }, move |u| {
+            let _ = tx.send(u);
+        });
+        Peer {
+            cmd,
+            rx,
+            chats: Default::default(),
+            paths: Default::default(),
+            attachments: None,
+            locked: None,
+            made: None,
+        }
     }
 
     fn pump(&mut self) {
@@ -52,6 +74,11 @@ impl Peer {
                         e.1.extend(lines);
                     }
                 }
+                Update::Files(a, unsealed) => {
+                    assert_eq!(unsealed, None);
+                    self.attachments = Some(a);
+                }
+                Update::Locked(why) => self.locked = Some(why),
                 Update::Made(id, _) => self.made = Some(id),
                 Update::Removed(id) => {
                     self.chats.remove(&id);
@@ -82,7 +109,9 @@ impl Peer {
 fn two_members_talk_and_send_voice() {
     let w = World::default();
     let mut alice = Peer::new(&w, "alice");
-    let mut bob = Peer::new(&w, "bob");
+    // Bob's state is sealed.
+    let bob_dir = dir("bob");
+    let mut bob = Peer::open(&w, "bob", bob_dir.clone(), Keys::Given(Secret::new(&[7; 32])));
 
     alice.cmd.send(Cmd::Create("friends".into(), 1)).unwrap();
     alice.wait("the group", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| c.0.joined)));
@@ -115,8 +144,9 @@ fn two_members_talk_and_send_voice() {
     let who = model::names(&view, &Settings::default(), "bob");
     let mut files = Files::default();
     for a in lines.iter().filter_map(|l| l.line.attachment.as_ref()) {
-        let bytes = std::fs::read(&bob.paths[&a.file]).unwrap();
-        assert_eq!(bytes, clip, "the clip arrives whole");
+        let bytes = bob.attachments.as_ref().unwrap().read(&a.file).unwrap();
+        assert_eq!(*bytes, clip, "the clip arrives whole");
+        assert_ne!(std::fs::read(&bob.paths[&a.file]).unwrap(), clip, "the clip is kept sealed");
         files.durations.insert(a.file.clone(), voice::duration(&bytes).unwrap());
     }
     let items = model::line_items(&lines, &who, &files, &Default::default(), chrono::Local::now());
@@ -135,6 +165,17 @@ fn two_members_talk_and_send_voice() {
     let (view, lines) = alice.chat(&g).clone();
     let items = model::line_items(&lines, &model::names(&view, &Settings::default(), "alice"), &Files::default(), &Default::default(), chrono::Local::now());
     assert!(items.iter().any(|i| i.mine && i.delivery == Delivery::Read));
+
+    // Bob's state opens only with its key.
+    drop(bob);
+    released(&bob_dir);
+    let mut keyless = Peer::open(&w, "bob", bob_dir.clone(), Keys::None);
+    keyless.wait("bob's state to stay shut", |p| p.locked.is_some());
+    assert!(keyless.chats.is_empty());
+    drop(keyless);
+    released(&bob_dir);
+    let mut bob = Peer::open(&w, "bob", bob_dir, Keys::Given(Secret::new(&[7; 32])));
+    bob.wait("bob's groups again", |p| p.chats.get(&bg).is_some_and(|c| c.1.iter().any(|l| l.line.text == "got it")));
 }
 
 /// Cancelling a join deletes the group and its voucher.

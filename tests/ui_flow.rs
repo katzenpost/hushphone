@@ -53,6 +53,7 @@ fn make_a_group_and_talk() {
             default_daemon: String::new(),
             name: Some("alice".into()),
             old_defaults: Vec::new(),
+            keys: hushphone::backend::Keys::None,
         },
     );
     ui.show().unwrap();

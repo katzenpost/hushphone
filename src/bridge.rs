@@ -11,8 +11,9 @@ use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
 use pigeonhole_protocols::protocols::katzenqt1::engine::ChatId;
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::mpsc::UnboundedSender;
+use zeroize::Zeroizing;
 
-use crate::backend::{self, Cmd, Link, Source, Update};
+use crate::backend::{self, Attachments, Cmd, Keys, Link, Source, Update};
 use crate::model::{self, Files};
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
@@ -46,6 +47,8 @@ pub struct Setup {
     pub name: Option<String>,
     /// Daemon addresses an older version saved as its default, to move to `default_daemon`.
     pub old_defaults: Vec<String>,
+    /// How the state is kept at rest.
+    pub keys: Keys,
 }
 
 struct App {
@@ -56,6 +59,8 @@ struct App {
     effects: tokio::runtime::Runtime,
     chats: BTreeMap<ChatId, ChatState>,
     paths: HashMap<String, PathBuf>,
+    /// The state's files, opened if it is sealed; from the client's thread once it has the key.
+    attachments: Option<Attachments>,
     files: Files,
     current: Option<ChatId>,
     expanded: HashSet<usize>,
@@ -93,6 +98,8 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     if let Err(e) = crate::harden::data_dir(&setup.data_dir) {
         eprintln!("hushphone: can't restrict {}: {e}", setup.data_dir.display());
     }
+    // Files handed to other programs last time, written out unsealed.
+    effects::clear_opened(&setup.cache_dir.join("open"));
     let mut settings = Settings::load(&setup.data_dir);
     if settings.name.is_empty()
         && let Some(n) = &setup.name
@@ -132,6 +139,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
             .expect("effects runtime"),
         chats: BTreeMap::new(),
         paths: HashMap::new(),
+        attachments: None,
         files: Files::default(),
         current: None,
         expanded: HashSet::new(),
@@ -308,10 +316,10 @@ fn wire(ui: &AppWindow) {
     });
     a.on_save_file(|line| {
         with_app(|app| {
-            let Some((path, name)) = app.attachment(line as usize) else { return };
+            let Some((bytes, name)) = app.attachment(line as usize) else { return };
             let intent = UserIntent::new();
             app.effects.spawn(async move {
-                let r = effects::save_file(intent, path, name).await;
+                let r = effects::save_file(intent, bytes, name).await;
                 later(move |app| match r {
                     Ok(true) => app.notice("Saved.", false),
                     Ok(false) => {}
@@ -322,10 +330,11 @@ fn wire(ui: &AppWindow) {
     });
     a.on_open_file(|line| {
         with_app(|app| {
-            let Some((path, _)) = app.attachment(line as usize) else { return };
+            let Some((bytes, name)) = app.attachment(line as usize) else { return };
             let intent = UserIntent::new();
+            let dir = app.setup.cache_dir.join("open");
             app.effects.spawn(async move {
-                if let Err(e) = effects::open_with(intent, path).await {
+                if let Err(e) = effects::open_with(intent, bytes, name, dir).await {
                     later(move |app| app.notice(&format!("Couldn't open: {e}"), true));
                 }
             });
@@ -397,6 +406,7 @@ impl App {
             source,
             state_dir: self.setup.data_dir.join("state"),
             name: self.settings.name.clone(),
+            keys: self.setup.keys.clone(),
         };
         self.cmd = Some(backend::spawn(params, |u| later(move |app| app.apply(u))));
     }
@@ -411,6 +421,16 @@ impl App {
 
     fn apply(&mut self, u: Update) {
         match u {
+            Update::Files(a, unsealed) => {
+                self.attachments = Some(a);
+                self.state(|s| s.set_at_rest_warning(unsealed.map_or_else(String::new, |why| {
+                    format!("Your chats are stored unencrypted on this device: {why}.")
+                }).into()));
+            }
+            Update::Locked(why) => {
+                self.state(|s| s.set_connection(Connection::Unreachable));
+                self.notice(&why, true);
+            }
             Update::Link(l) => {
                 self.state(|s| {
                     s.set_connection(match l {
@@ -490,10 +510,9 @@ impl App {
             if !path.exists() {
                 continue;
             }
-            self.files.types.insert(a.file.clone(), effects::sniff(path));
-            if voice::is_voice(&a.filetype, &a.name)
-                && let Ok(b) = std::fs::read(path)
-            {
+            let Some(Ok(b)) = self.attachments.as_ref().map(|f| f.read(&a.file)) else { continue };
+            self.files.types.insert(a.file.clone(), effects::sniff(&b));
+            if voice::is_voice(&a.filetype, &a.name) {
                 self.files.durations.insert(a.file.clone(), voice::duration(&b).unwrap_or_default());
             }
         }
@@ -523,12 +542,16 @@ impl App {
         }
     }
 
-    fn attachment(&self, line: usize) -> Option<(PathBuf, String)> {
+    /// A line's attachment, opened, and the name to give it; `None` until it has arrived.
+    fn attachment(&self, line: usize) -> Option<(Zeroizing<Vec<u8>>, String)> {
         let c = self.chats.get(self.current.as_ref()?)?;
         let l = c.lines.iter().find(|l| l.line.id == line)?;
         let a = l.line.attachment.as_ref()?;
-        let path = self.paths.get(&a.file)?.clone();
-        path.exists().then(|| (path, text::identifier(&a.name, 200)))
+        if !self.paths.get(&a.file)?.exists() {
+            return None;
+        }
+        let bytes = self.attachments.as_ref()?.read(&a.file).ok()?;
+        Some((bytes, text::identifier(&a.name, 200)))
     }
 
     fn render_all(&mut self) {
@@ -597,11 +620,11 @@ impl App {
             self.render_current();
             return;
         }
-        let Some((path, _)) = self.attachment(line) else {
+        let Some((bytes, _)) = self.attachment(line) else {
             self.notice("That voice message hasn't arrived yet.", true);
             return;
         };
-        if let Err(e) = self.voice.play(&chat, line, &path) {
+        if let Err(e) = self.voice.play(&chat, line, bytes) {
             self.notice(&format!("Couldn't play it: {e}"), true);
             return;
         }

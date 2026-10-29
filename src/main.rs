@@ -55,6 +55,7 @@ fn main() {
         default_daemon: daemon.unwrap_or(default_daemon),
         name,
         old_defaults: Vec::new(),
+        keys: hushphone::backend::Keys::System,
     };
     if let Err(e) = hushphone::run(setup) {
         eprintln!("hushphone: {e}");

@@ -2,7 +2,9 @@
 //! handing a file to another program. Each takes a [`UserIntent`], which only the UI's callbacks
 //! can make, so nothing that arrives from the network can cause one.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+use zeroize::Zeroizing;
 
 use crate::bridge::UserIntent;
 
@@ -41,18 +43,25 @@ mod imp {
         Ok(Some(Picked { name: f.file_name(), bytes: f.read().await }))
     }
 
-    /// Ask the desktop portal where to save a received file, and copy it there.
-    pub async fn save_file(_: UserIntent, from: PathBuf, name: String) -> Result<bool, String> {
+    /// Ask the desktop portal where to save a received file, and write it there.
+    pub async fn save_file(_: UserIntent, bytes: Zeroizing<Vec<u8>>, name: String) -> Result<bool, String> {
         let Some(to) = rfd::AsyncFileDialog::new().set_title("Save file").set_file_name(&name).save_file().await else {
             return Ok(false);
         };
-        std::fs::copy(&from, to.path()).map_err(|e| e.to_string())?;
+        std::fs::write(to.path(), &*bytes).map_err(|e| e.to_string())?;
         Ok(true)
     }
 
     /// Hand a received file to the program the desktop chooses, through the OpenURI portal,
-    /// which asks the user which program to use.
-    pub async fn open_with(_: UserIntent, path: PathBuf) -> Result<(), String> {
+    /// which asks the user which program to use. The other program needs the file itself, so
+    /// it is written out unsealed in `dir`, which is emptied each time and when the app starts.
+    pub async fn open_with(_: UserIntent, bytes: Zeroizing<Vec<u8>>, name: String, dir: PathBuf) -> Result<(), String> {
+        clear_opened(&dir);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join(file_name(&name));
+        crate::settings::open_private(&path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, &bytes))
+            .map_err(|e| e.to_string())?;
         let f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
         ashpd::desktop::open_uri::OpenFileRequest::default()
             .ask(true)
@@ -79,27 +88,37 @@ mod imp {
         Err("Sending files from Android is not ready yet.".into())
     }
 
-    pub async fn save_file(_: UserIntent, _: PathBuf, _: String) -> Result<bool, String> {
+    pub async fn save_file(_: UserIntent, _: Zeroizing<Vec<u8>>, _: String) -> Result<bool, String> {
         Err("Saving files on Android is not ready yet.".into())
     }
 
-    pub async fn open_with(_: UserIntent, _: PathBuf) -> Result<(), String> {
+    pub async fn open_with(_: UserIntent, _: Zeroizing<Vec<u8>>, _: String, _: PathBuf) -> Result<(), String> {
         Err("Opening files on Android is not ready yet.".into())
     }
 }
 
 pub use imp::*;
 
+/// A received file's name as one file in a directory of ours.
+#[cfg(not(target_os = "android"))]
+fn file_name(name: &str) -> String {
+    let n = name.replace(['/', '\\'], "_");
+    if n.is_empty() || n.starts_with('.') { format!("file{n}") } else { n }
+}
+
+/// Remove the files handed to other programs, written over first.
+pub fn clear_opened(dir: &std::path::Path) {
+    crate::keys::wipe(dir);
+}
+
 /// What a file's bytes say it is, never what its name or sender claims.
-pub fn sniff(path: &Path) -> String {
-    let mut head = [0u8; 512];
-    let n = std::fs::File::open(path)
-        .and_then(|mut f| std::io::Read::read(&mut f, &mut head))
-        .unwrap_or(0);
-    match infer::get(&head[..n]) {
+pub fn sniff(bytes: &[u8]) -> String {
+    let head = &bytes[..bytes.len().min(512)];
+    let n = head.len();
+    match infer::get(head) {
         Some(t) if t.mime_type() == "audio/ogg" || t.mime_type() == "audio/opus" => "Ogg audio".into(),
         Some(t) => describe(t.mime_type(), t.extension()),
-        None if n > 0 && std::str::from_utf8(&head[..n]).is_ok() => "text".into(),
+        None if n > 0 && std::str::from_utf8(head).is_ok() => "text".into(),
         None => "file".into(),
     }
 }
@@ -124,17 +143,19 @@ mod tests {
 
     #[test]
     fn types_come_from_the_bytes() {
-        let dir = crate::test_dir();
-        let exe = dir.path().join("invoice.pdf");
-        std::fs::write(&exe, b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00").unwrap();
-        assert_eq!(sniff(&exe), "program");
-        let pdf = dir.path().join("x.bin");
-        std::fs::write(&pdf, b"%PDF-1.7\n").unwrap();
-        assert_eq!(sniff(&pdf), "PDF document");
-        let txt = dir.path().join("a.png");
-        std::fs::write(&txt, b"hello").unwrap();
-        assert_eq!(sniff(&txt), "text");
-        let opus = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone.opus");
-        assert_eq!(sniff(&opus), "Ogg audio");
+        assert_eq!(sniff(b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00"), "program");
+        assert_eq!(sniff(b"%PDF-1.7\n"), "PDF document");
+        assert_eq!(sniff(b"hello"), "text");
+        let opus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone.opus");
+        assert_eq!(sniff(&std::fs::read(opus).unwrap()), "Ogg audio");
+    }
+
+    #[cfg(not(target_os = "android"))]
+    #[test]
+    fn opened_files_stay_in_their_directory() {
+        assert_eq!(file_name("a.pdf"), "a.pdf");
+        assert_eq!(file_name("../../.bashrc"), "file.._.._.bashrc");
+        assert_eq!(file_name(".."), "file..");
+        assert_eq!(file_name(""), "file");
     }
 }

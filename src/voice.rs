@@ -1,12 +1,13 @@
 //! Push to talk over rustic_audio: clips are Ogg Opus, 48 kHz mono, sent as an ordinary file named
 //! by the SHA-256 of its bytes, as frank_chat and katzenqt send them.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use rustic_audio::VoiceNoteEngine;
 use sha2::{Digest, Sha256};
+use zeroize::Zeroizing;
 
 /// Shorter clips are taken for a slip of the finger and dropped.
 pub const MIN_CLIP: Duration = Duration::from_millis(300);
@@ -126,11 +127,12 @@ impl Voice {
         }
     }
 
-    pub fn play(&mut self, chat: &str, line: usize, path: &Path) -> Result<(), String> {
+    /// Play a received clip from memory: a clip kept sealed is never written out to be played.
+    pub fn play(&mut self, chat: &str, line: usize, mut bytes: Zeroizing<Vec<u8>>) -> Result<(), String> {
         self.stop_playing();
-        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
         let length = duration(&bytes).unwrap_or_default();
-        self.with_engine(|e| e.play_received(path))?;
+        let bytes = std::mem::take(&mut *bytes);
+        self.with_engine(move |e| e.play_received_bytes(bytes))?;
         self.playing = Some(Playing {
             chat: chat.into(),
             line,
@@ -186,7 +188,7 @@ mod tests {
 
     #[test]
     fn frank_chat_clip() {
-        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone.opus");
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone.opus");
         let Ok(b) = std::fs::read(p) else { return };
         let d = duration(&b).unwrap();
         assert!(d > Duration::from_millis(300) && d < Duration::from_secs(60), "{d:?}");

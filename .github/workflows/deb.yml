@@ -48,5 +48,5 @@ jobs:
       - uses: actions/download-artifact@v5
         with:
           name: deb-ubuntu-24.04
-      - run: sudo apt-get update && sudo apt-get install -y xvfb ./hushphone_*.deb
+      - run: sudo apt-get update && sudo apt-get install -y xvfb gnome-keyring libsecret-tools ./hushphone_*.deb
       - run: packaging/apparmor/test.sh

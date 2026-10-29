@@ -105,7 +105,24 @@ whatever other members send is untrusted.
   name. A recording indicator is shown for exactly as long as the microphone is open.
 - **Notices never take over.** Dialogs open only from your own action. Notices from the network
   never take the focus.
-- **On disk.** Settings are written with mode 0600. Logs hold no message text.
+- **Encrypted at rest.** As Signal does, hushphone seals what it keeps, with no passphrase: the
+  groups, their caps, every message, attachment and voice clip. They are sealed with
+  XChaCha20-Poly1305 under a random key that the system keeps for hushphone.
+  - On Linux, the key is kept in the session's keyring (the Secret Service: GNOME Keyring or
+    KWallet), which unlocks when you log in. With no keyring running, hushphone keeps its state
+    unsealed and says so in a strip under the group list.
+  - On Android, the key is wrapped by an AES key held in Android's Keystore, in StrongBox where the
+    phone has one, and never leaves it.
+  - A copy of the files, from a backup or a lost disk, cannot be read without that key. Someone
+    who can run programs as you while you are logged in (or as hushphone, on an unlocked phone)
+    can ask for the key, as hushphone does.
+  - Voice clips are played from memory. A file you open with another program has to be written
+    out unsealed for it, in hushphone's cache; it is wiped the next time and when hushphone
+    starts.
+  - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
+    copy is written over and removed, but flash storage may still hold its old blocks.
+- **On disk.** Settings (your name, the daemon's address) are written with mode 0600 and are not
+  sealed. Logs hold no message text.
 - **Sandboxed.** kpclientd does all the networking, so hushphone needs very little of the system.
   - **seccomp.** Once hushphone knows the daemon's address, it puts a seccomp filter on every
     thread. With kpclientd on a unix socket, as on Linux (`@katzenpost`), it may open unix
