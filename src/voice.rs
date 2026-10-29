@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use rustic_audio::VoiceNoteEngine;
+use rustic_audio::{VoiceClip, VoiceNoteEngine};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
@@ -42,10 +42,10 @@ pub fn show_duration(d: Duration) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
-/// A clip ready to send.
+/// A clip ready to send, in guarded memory: it is never written to a file.
 pub struct Clip {
     pub name: String,
-    pub bytes: Vec<u8>,
+    pub audio: VoiceClip,
 }
 
 /// What is playing: which line, since when, for how long.
@@ -92,7 +92,7 @@ impl Voice {
             return Ok(());
         }
         self.stop_playing();
-        self.with_engine(|e| e.start_capture(None).map(|_| ()))?;
+        self.with_engine(|e| e.start_capture_in_memory())?;
         self.recording_since = Some(Instant::now());
         Ok(())
     }
@@ -104,18 +104,14 @@ impl Voice {
         let engine = self.engine.clone();
         std::thread::spawn(move || {
             let r = (|| {
-                let clip = {
+                let audio = {
                     let mut e = engine.lock().map_err(|_| "audio engine poisoned".to_string())?;
-                    e.as_mut().ok_or("no audio engine")?.stop_capture()?
+                    e.as_mut().ok_or("no audio engine")?.stop_capture_in_memory()?
                 };
-                let short = since.elapsed() < MIN_CLIP || clip.duration_seconds() < MIN_CLIP.as_secs_f64();
-                let bytes = std::fs::read(clip.path()).map_err(|e| e.to_string());
-                let _ = std::fs::remove_file(clip.path());
-                if short {
+                if since.elapsed() < MIN_CLIP || audio.duration_seconds() < MIN_CLIP.as_secs_f64() {
                     return Ok(None);
                 }
-                let bytes = bytes?;
-                Ok(Some(Clip { name: clip_name(&bytes), bytes }))
+                Ok(Some(Clip { name: clip_name(audio.bytes()), audio }))
             })();
             done(r);
         });

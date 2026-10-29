@@ -5088,14 +5088,17 @@ dependencies = [
 [[package]]
 name = "rustic_audio"
 version = "0.0.2"
-source = "git+https://github.com/katzenpost/rustic_audio?rev=f69c020d0df6253178e74f244db67292177c3940#f69c020d0df6253178e74f244db67292177c3940"
+source = "git+https://github.com/katzenpost/rustic_audio?rev=eecb8ee0b2ebabcb466b1438f190584190fc9720#eecb8ee0b2ebabcb466b1438f190584190fc9720"
 dependencies = [
  "cpal",
  "hound",
+ "libc",
+ "memsec",
  "ogg",
  "opus-rs",
  "realfft",
  "rustfft",
+ "zeroize",
 ]
 
 [[package]]

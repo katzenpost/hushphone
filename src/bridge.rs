@@ -661,7 +661,8 @@ impl App {
         let Some(chat) = self.recording_for.take() else { return };
         self.voice.stop(move |r| {
             later(move |app| match r {
-                Ok(Some(clip)) if app.joined(&chat) => app.send(Cmd::SendFile(chat, clip.name, clip.bytes)),
+                // The client keeps what it sends sealed, but takes it as a plain Vec.
+                Ok(Some(clip)) if app.joined(&chat) => app.send(Cmd::SendFile(chat, clip.name, clip.audio.bytes().to_vec())),
                 Ok(Some(_)) => app.notice("The group is gone: the voice message was not sent.", true),
                 Ok(None) => app.notice("Too short to send: hold the button while you talk.", false),
                 Err(e) => app.notice(&format!("Couldn't record: {e}"), true),

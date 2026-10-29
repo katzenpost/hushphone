@@ -116,9 +116,11 @@ whatever other members send is untrusted.
   - A copy of the files, from a backup or a lost disk, cannot be read without that key. Someone
     who can run programs as you while you are logged in (or as hushphone, on an unlocked phone)
     can ask for the key, as hushphone does.
-  - Voice clips are played from memory. A file you open with another program has to be written
-    out unsealed for it, in hushphone's cache; it is wiped the next time and when hushphone
-    starts.
+  - Voice clips are recorded and played in memory, never in files. A clip being recorded or
+    encoded lives in guarded memory: between guard pages, locked out of swap where the system
+    allows, left out of core dumps, and wiped when freed.
+  - A file you open with another program has to be written out unsealed for it, in hushphone's
+    cache; it is wiped the next time and when hushphone starts.
   - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
     copy is written over and removed, but flash storage may still hold its old blocks.
 - **On disk.** Settings (your name, the daemon's address) are written with mode 0600 and are not
