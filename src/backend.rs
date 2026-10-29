@@ -1,19 +1,25 @@
 //! The client's side: a tokio runtime on its own thread owns the katzenqt1 client, carries out
 //! the UI's commands and tells it what changed. Nothing here touches the screen, the clipboard,
-//! files outside the state directory or the microphone.
+//! files outside the state directory or the microphone; the key that seals the state comes from
+//! the system's keyring, through [`crate::keys`].
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, LineView};
+use pigeonhole_protocols::protocols::katzenqt1::client::store::StoreFiles;
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, Files, LineView};
 use pigeonhole_protocols::protocols::katzenqt1::engine::{Attachment, ChatId};
+use pigeonhole_protocols::secret::Secret;
 use pigeonhole_protocols::transport::Backend;
 use pigeonhole_protocols::transport::remote::Remote;
 use pigeonhole_protocols::transport::sim::World;
 use pigeonhole_protocols::transport::thinclient::ThinClientBackend;
 use futures_util::FutureExt;
 use tokio::sync::mpsc;
+use zeroize::Zeroizing;
+
+use crate::keys::{self, Custody};
 
 /// Where Pigeonhole is.
 #[derive(Clone)]
@@ -24,6 +30,32 @@ pub enum Source {
     SimSocket(PathBuf),
     /// An in-memory Pigeonhole shared by the clients of this process.
     Memory(World),
+}
+
+/// How the state is kept at rest.
+#[derive(Clone)]
+pub enum Keys {
+    /// Sealed with a key the system keeps; unsealed, and the user told, when it can keep none.
+    System,
+    /// Unsealed: for tests.
+    None,
+    /// Sealed with this key: for tests.
+    Given(Secret),
+}
+
+/// The files the state keeps, opened if it is sealed.
+pub struct Attachments(StoreFiles);
+
+impl Attachments {
+    pub fn read(&self, file: &str) -> Result<Zeroizing<Vec<u8>>, String> {
+        self.0.read(file).map(Zeroizing::new).map_err(|e| e.to_string())
+    }
+}
+
+impl std::fmt::Debug for Attachments {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Attachments")
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,6 +85,10 @@ pub enum Cmd {
 
 #[derive(Debug)]
 pub enum Update {
+    /// The state's files; and, when the state is not sealed, why not.
+    Files(Attachments, Option<String>),
+    /// The state cannot be opened, and the client will not start; why.
+    Locked(String),
     Link(Link),
     /// A group, and its lines from `from` on (all of them when `from` is 0).
     Chat {
@@ -74,6 +110,7 @@ pub struct Params {
     pub source: Source,
     pub state_dir: PathBuf,
     pub name: String,
+    pub keys: Keys,
 }
 
 /// Start the client's thread; `tell` is called on that thread for every update.
@@ -93,12 +130,53 @@ pub fn spawn(p: Params, tell: impl Fn(Update) + Send + Sync + 'static) -> mpsc::
     tx
 }
 
+/// The key the state is sealed with, after sealing it if it was not; `None` when it is to stay
+/// unsealed. The UI is given the state's files to read attachments with.
+async fn key(p: &Params, tell: &impl Fn(Update)) -> Result<Option<Secret>, String> {
+    let mut unsealed = None;
+    let key = match &p.keys {
+        Keys::None => None,
+        Keys::Given(k) => Some(k.clone()),
+        Keys::System => match keys::custody(&keys::System, &p.state_dir).await {
+            Custody::Sealed(k) => Some(k),
+            Custody::Unsealed(why) => {
+                unsealed = Some(why);
+                None
+            }
+            Custody::Lost(why) => return Err(lost(&p.state_dir, &why)),
+        },
+    };
+    if let Some(k) = &key {
+        keys::seal_existing(&p.state_dir, k).map_err(|e| format!("Couldn't seal your chats: {e}."))?;
+    }
+    tell(Update::Files(Attachments(StoreFiles::new(p.state_dir.clone(), key.clone())), unsealed));
+    Ok(key)
+}
+
+fn lost(dir: &std::path::Path, why: &str) -> String {
+    let fix = if cfg!(target_os = "android") {
+        "To start over without them, clear hushphone's storage in Android's settings.".to_string()
+    } else {
+        format!("If it is gone for good, move {} aside to start over without them.", dir.display())
+    };
+    format!("Your chats are sealed, but their key can't be had: {why}. {fix}")
+}
+
 async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Update) + Send + Sync + 'static) {
+    let key = match key(&p, &tell).await {
+        Ok(k) => k,
+        Err(why) => {
+            tell(Update::Locked(why));
+            while rx.recv().await.is_some() {}
+            return;
+        }
+    };
     let cfg = || Config {
         state_dir: p.state_dir.clone(),
         name: p.name.clone(),
         epoch_poll: Duration::from_secs(60),
         no_sync: false,
+        key: key.clone(),
     };
     match &p.source {
         Source::Memory(w) => {
@@ -189,6 +267,10 @@ async fn serve<B: Backend>(
 ) -> Served {
     let c = match Client::open(cfg, backend).await {
         Ok(c) => c,
+        Err(e @ ClientError::Locked) => {
+            tell(Update::Locked(sentence(&e)));
+            return Served::Quit;
+        }
         Err(e) => {
             tell(Update::Stopped(e.to_string()));
             return Served::Stopped;
@@ -303,6 +385,8 @@ pub fn sentence(e: &ClientError) -> String {
         RemoveSelf => "You can't remove yourself. Leave the group instead.".into(),
         FileTooLarge => "That file is too large to send: 16 MiB at most.".into(),
         EmptyMessage => "There's nothing to send.".into(),
+        Locked => "Your chats are sealed with another key, or were changed, and can't be opened.".into(),
+        Unsealed => "Your chats aren't sealed yet.".into(),
         Store(s) => format!("Couldn't save: {s}"),
     }
 }

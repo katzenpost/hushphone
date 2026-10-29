@@ -183,6 +183,31 @@ component Sidebar inherits Rectangle {
             }
         }
 
+        // The app's own warning, in a place no message can reach; it stays while it is true.
+        if AppState.at-rest-warning != "": Rectangle {
+            background: Theme.warn-soft;
+            accessible-role: text;
+            accessible-label: AppState.at-rest-warning;
+            HorizontalLayout {
+                padding: Theme.s3;
+                padding-left: Theme.s4;
+                spacing: Theme.s2;
+                Icon {
+                    y: (parent.height - self.height) / 2;
+                    icon: @image-url("icons/alert.svg");
+                    tint: Theme.warn;
+                    size: 16px;
+                }
+                Text {
+                    text: AppState.at-rest-warning;
+                    color: Theme.text;
+                    font-size: Theme.fs-small;
+                    wrap: word-wrap;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
         Rectangle { height: 1px; background: Theme.divider; }
         HorizontalLayout {
             padding: Theme.s3;

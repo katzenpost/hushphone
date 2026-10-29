@@ -73,6 +73,8 @@ export global AppState {
     in property <bool> adding;
     in property <bool> recording;
     in property <string> record-time;
+    // Why the state is stored unencrypted, when it is.
+    in property <string> at-rest-warning;
     in property <string> notice;
     in property <bool> notice-error;
 }
