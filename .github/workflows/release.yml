@@ -18,12 +18,12 @@ on:
     paths:
       - .github/workflows/release.yml
       - scripts/**
+      - Makefile
       - rust-toolchain.toml
   workflow_dispatch:
 
 env:
   VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'test' }}
-  NDK: "30.0.16248370"
 
 jobs:
   test:
@@ -44,7 +44,7 @@ jobs:
         with:
           path: ${{ matrix.dir }}
       - run: ${{ matrix.dir }}/scripts/linux-env.sh
-      - run: . $HOME/.cargo/env && ${{ matrix.dir }}/scripts/build-release.sh linux
+      - run: . $HOME/.cargo/env && make -C ${{ matrix.dir }} release-linux
       - uses: actions/upload-artifact@v5
         with:
           name: linux-${{ strategy.job-index }}
@@ -64,9 +64,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - run: cargo install cargo-apk --locked --version 0.10.0
-        working-directory: ${{ runner.temp }}
-      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;$NDK"
       - name: Keystore
         env:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
@@ -86,14 +83,7 @@ jobs:
             echo "CARGO_APK_RELEASE_KEYSTORE_PASSWORD=throwaway" >> $GITHUB_ENV
           fi
           echo "CARGO_APK_RELEASE_KEYSTORE=$RUNNER_TEMP/release.jks" >> $GITHUB_ENV
-      - run: ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK ${{ matrix.dir }}/scripts/build-release.sh android
-      - name: Check
-        run: |
-          for abi in arm64-v8a x86_64; do
-            apk=${{ matrix.dir }}/dist/hushphone-$VERSION-$abi.apk
-            $ANDROID_HOME/build-tools/36.0.0/apksigner verify $apk
-            [ "$(unzip -Z1 $apk 'lib/*')" = lib/$abi/libhushphone.so ]
-          done
+      - run: make -C ${{ matrix.dir }} android-tools release-android
       - uses: actions/upload-artifact@v5
         with:
           name: android-${{ strategy.job-index }}
@@ -110,11 +100,7 @@ jobs:
       - name: The changelog names this version
         if: startsWith(github.ref, 'refs/tags/')
         run: head -1 debian/changelog | grep -F "(${VERSION#v})"
-      - run: make deb-image DISTRO=${{ matrix.distro }} PODMAN=docker
-      - name: Build, install, test and rebuild
-        run: |
-          docker run --rm -v "$PWD":/build -w /build \
-            "$(make -s deb-image-ref DISTRO=${{ matrix.distro }})" make deb-ci
+      - run: make deb-ci-image DISTRO=${{ matrix.distro }} PODMAN=docker
       - name: Name it for the release
         run: |
           mkdir out

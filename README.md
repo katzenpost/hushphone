@@ -54,7 +54,8 @@ are the same.
 
 hushphone reaches the mixnet through
 [kpclientd-android](https://github.com/katzenpost/kpclientd-android), which runs kpclientd on the
-phone and lets in only the apps you allow.
+phone and lets in only the apps you allow. Install both from their GitHub releases: the
+`arm64-v8a` APKs for a phone, `x86_64` for an emulator.
 - **Asking.** On its first start, hushphone asks kpclientd-android for a connection.
   kpclientd-android then asks you whether hushphone may use the mixnet.
 - **Connecting.** Once you allow it, every connection hushphone makes comes from kpclientd-android
@@ -174,19 +175,29 @@ if both builds of each are byte for byte the same. Release builds are reproducib
   per ABI, since cargo-apk orders the libraries of a multi-ABI APK at random.
 - Paths and dates are taken out of the output.
 
+Each step is a make target, which CI calls as it is:
+
+| Target | |
+|---|---|
+| `make check test` | clippy and the tests |
+| `make release-linux` | the Linux tarball, into `dist/` |
+| `make android-tools release-android` | the pinned SDK pieces and cargo-apk, then the APKs, into `dist/` |
+| `make deb-ci-image DISTRO=…` | the Debian package, built twice in its build image and tested |
+
 To check a release against its source:
 
 ```sh
-git checkout v0.1.0
+git checkout v0.1.3
 img=ubuntu:22.04@sha256:8a2321a92b438238f93b4346fff61bc4259c99fdd4d9b52ee86f153fee0c344f
-podman run --rm -v $PWD:/src -w /src $img \
-    sh -c 'scripts/linux-env.sh && . /root/.cargo/env && scripts/build-release.sh linux'
+podman run --rm -e VERSION=v0.1.3 -v $PWD:/src -w /src $img \
+    sh -c 'scripts/linux-env.sh && . /root/.cargo/env && make release-linux'
 sha256sum dist/*.tar.gz
 ```
 
 The APKs are signed, so a rebuild without the key differs only in its signature. Compare their
-entries with `unzip -v`. To rebuild them, use NDK 30.0.16248370, build tools 36.0.0, JDK 21 and
-cargo-apk 0.10.0, then run `ANDROID_NDK_ROOT=… scripts/build-release.sh android`.
+entries with `unzip -v`. To rebuild them, use JDK 21 and run
+`VERSION=v0.1.3 make android-tools release-android`, with `CARGO_APK_RELEASE_KEYSTORE` and
+`CARGO_APK_RELEASE_KEYSTORE_PASSWORD` naming a keystore of your own.
 
 ## License
 
