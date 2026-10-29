@@ -1,3 +1,12 @@
+hushphone (0.1.3) unstable; urgency=medium
+
+  * Encrypt the state file and attachments whole at rest, with a random key kept by
+    the Secret Service keyring on Linux or the Android Keystore; warn when no keyring runs.
+  * Seal an existing plain state in place on first start with a key.
+  * Record voice notes into guarded memory, never to a file.
+
+ -- Katzenpost <packages@katzenpost.network>  Thu, 29 Oct 2026 13:04:50 +0000
+
 hushphone (0.1.2) unstable; urgency=medium
 
   * Keep the data directory its owner's alone; the process cannot be dumped or traced.
