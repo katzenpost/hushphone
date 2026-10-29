@@ -2,7 +2,7 @@
 //! keyring that the session unlocks, on Android a key the Keystore will not let out wraps it. No
 //! passphrase is asked for, so the state is as safe at rest as the session or the device lock.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use pigeonhole_protocols::protocols::katzenqt1::client::store::{Options, Store, StoreError};
 use pigeonhole_protocols::secret::Secret;
@@ -45,50 +45,17 @@ pub async fn custody(k: &impl Keeper, dir: &Path) -> Custody {
 }
 
 fn sealed(dir: &Path) -> bool {
-    finish(dir);
-    dir.join("state.redb").exists() && matches!(Store::open(dir, Options::default()), Err(StoreError::Locked))
+    dir.join("state.sealed").exists()
 }
 
-fn beside(dir: &Path, ext: &str) -> PathBuf {
-    dir.with_extension(ext)
-}
-
-/// Finish a sealing that stopped part way: the sealed copy goes in place if the state is not
-/// there, and the old unsealed state is wiped.
-fn finish(dir: &Path) {
-    let new = beside(dir, "new");
-    if !dir.exists() && new.exists() {
-        let _ = std::fs::rename(&new, dir);
-    }
-    let old = beside(dir, "old");
-    if old.exists() {
-        wipe(&old);
-    }
-}
-
-/// Seal the state in `dir` with `key` if it is not sealed yet: a sealed copy is made beside it,
-/// put in its place, and the unsealed one wiped.
+/// Seal the state in `dir` with `key` if it is not sealed yet, or not all of it: in place, as
+/// one sealed file and each file beside it sealed whole, with the unsealed database wiped.
 pub fn seal_existing(dir: &Path, key: &Secret) -> Result<(), String> {
-    finish(dir);
-    if !dir.join("state.redb").exists() {
-        return Ok(());
-    }
     match Store::open(dir, Options { no_sync: false, key: Some(key.clone()) }) {
-        Ok(_) => return Ok(()),
-        Err(StoreError::Unsealed) => {}
-        Err(e) => return Err(e.to_string()),
+        Ok(_) => Ok(()),
+        Err(StoreError::Unsealed) => Store::reseal(dir, key.clone()).map_err(|e| e.to_string()),
+        Err(e) => Err(e.to_string()),
     }
-    let (new, old) = (beside(dir, "new"), beside(dir, "old"));
-    if new.exists() {
-        std::fs::remove_dir_all(&new).map_err(|e| e.to_string())?;
-    }
-    Store::reseal(dir, &new, key.clone()).map_err(|e| e.to_string())?;
-    let parent = dir.parent().unwrap_or(Path::new("."));
-    let sync = || std::fs::File::open(parent).and_then(|d| d.sync_all());
-    std::fs::rename(dir, &old).and_then(|()| sync()).map_err(|e| e.to_string())?;
-    std::fs::rename(&new, dir).and_then(|()| sync()).map_err(|e| e.to_string())?;
-    wipe(&old);
-    Ok(())
 }
 
 /// Write over every file under `dir` and remove it. Flash storage may keep the old blocks
@@ -176,11 +143,11 @@ pub struct System;
 #[cfg(target_os = "android")]
 impl Keeper for System {
     async fn get(&self, dir: &Path) -> Result<Option<Secret>, String> {
-        crate::android::unwrap_state_key(&beside(dir, "key"))
+        crate::android::unwrap_state_key(&dir.with_extension("key"))
     }
 
     async fn put(&self, dir: &Path, key: &Secret) -> Result<(), String> {
-        crate::android::wrap_state_key(&beside(dir, "key"), key)
+        crate::android::wrap_state_key(&dir.with_extension("key"), key)
     }
 }
 
@@ -188,6 +155,7 @@ impl Keeper for System {
 mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
+    use std::path::PathBuf;
     use std::sync::Mutex;
 
     use pigeonhole_protocols::protocols::katzenqt1::engine::{Changes, Chat, Line, State, StepResult};
@@ -286,7 +254,7 @@ mod tests {
         let key = Secret::new(&[1; 32]);
         seal_existing(&dir, &key).unwrap();
         assert!(!holds(base.path(), WORDS.as_bytes()));
-        assert!(!dir.with_extension("old").exists() && !dir.with_extension("new").exists());
+        assert!(dir.join("state.sealed").exists() && !dir.join("state.redb").exists());
         let mut st = Store::open(&dir, Options { no_sync: true, key: Some(key.clone()) }).unwrap();
         assert_eq!(st.load("bob").unwrap().chats[0].log[0].text, WORDS);
         drop(st);
@@ -294,16 +262,17 @@ mod tests {
         seal_existing(&dir, &key).unwrap();
     }
 
-    /// A sealing cut short after the old state was moved aside carries on at the next start.
+    /// A sealing cut short is finished at the next start.
     #[test]
     fn a_sealing_cut_short_is_finished() {
         let base = crate::test_dir();
         let dir = base.path().join("state");
         let key = Secret::new(&[1; 32]);
-        write_state(&dir.with_extension("old"), None);
-        write_state(&dir.with_extension("new"), Some(key.clone()));
+        write_state(&dir, None);
+        std::fs::write(dir.join(".sealing"), b"").unwrap();
         seal_existing(&dir, &key).unwrap();
         assert!(!holds(base.path(), WORDS.as_bytes()));
+        assert!(!dir.join(".sealing").exists());
         let mut st = Store::open(&dir, Options { no_sync: true, key: Some(key) }).unwrap();
         assert_eq!(st.load("bob").unwrap().chats[0].log[0].text, WORDS);
     }

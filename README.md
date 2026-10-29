@@ -105,9 +105,12 @@ whatever other members send is untrusted.
   name. A recording indicator is shown for exactly as long as the microphone is open.
 - **Notices never take over.** Dialogs open only from your own action. Notices from the network
   never take the focus.
-- **Encrypted at rest.** As Signal does, hushphone seals what it keeps, with no passphrase: the
-  groups, their caps, every message, attachment and voice clip. They are sealed with
-  XChaCha20-Poly1305 under a random key that the system keeps for hushphone.
+- **Encrypted at rest.** As Signal does with its database, hushphone keeps its state file
+  encrypted whole, with no passphrase: the groups, their caps and every message are in one file,
+  `state.sealed`, that is written out encrypted after every change. Each attachment and voice clip
+  beside it is encrypted whole too. Both use XChaCha20-Poly1305 under a random key that the system
+  keeps for hushphone. All that can be seen on disk is how many files there are, how large, and
+  their names.
   - On Linux, the key is kept in the session's keyring (the Secret Service: GNOME Keyring or
     KWallet), which unlocks when you log in. With no keyring running, hushphone keeps its state
     unsealed and says so in a strip under the group list.

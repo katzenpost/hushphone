@@ -26,6 +26,8 @@ profile hushphone /usr/bin/hushphone {
   unix,
   dbus bus=session,
   owner /run/user/[0-9]*/bus rw,
+  # The session bus of dbus-run-session and dbus-launch, where the keyring is found.
+  owner /tmp/dbus-* rw,
   # Refused and logged: nothing in hushphone should ever try.
   audit deny network inet,
   audit deny network inet6,

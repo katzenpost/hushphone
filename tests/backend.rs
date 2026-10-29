@@ -31,11 +31,11 @@ fn dir(name: &str) -> PathBuf {
     d
 }
 
-/// Wait for the client that had the state in `dir` to let it go.
-fn released(dir: &Path) {
+/// Wait for the client that had the state in `dir`, sealed with `key`, to let it go.
+fn released(dir: &Path, key: &Secret) {
     use pigeonhole_protocols::protocols::katzenqt1::client::store::{Options, Store, StoreError};
     let deadline = Instant::now() + Duration::from_secs(10);
-    while let Err(StoreError::Other(e)) = Store::open(dir, Options::default()) {
+    while let Err(StoreError::Other(e)) = Store::open(dir, Options { no_sync: true, key: Some(key.clone()) }) {
         assert!(Instant::now() < deadline, "the state stays open: {e}");
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -168,12 +168,12 @@ fn two_members_talk_and_send_voice() {
 
     // Bob's state opens only with its key.
     drop(bob);
-    released(&bob_dir);
+    released(&bob_dir, &Secret::new(&[7; 32]));
     let mut keyless = Peer::open(&w, "bob", bob_dir.clone(), Keys::None);
     keyless.wait("bob's state to stay shut", |p| p.locked.is_some());
     assert!(keyless.chats.is_empty());
     drop(keyless);
-    released(&bob_dir);
+    released(&bob_dir, &Secret::new(&[7; 32]));
     let mut bob = Peer::open(&w, "bob", bob_dir, Keys::Given(Secret::new(&[7; 32])));
     bob.wait("bob's groups again", |p| p.chats.get(&bg).is_some_and(|c| c.1.iter().any(|l| l.line.text == "got it")));
 }

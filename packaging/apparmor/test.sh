@@ -32,10 +32,11 @@ undenied() {
     fi
 }
 
-# A sealed state says so in its meta table; an unsealed one does not.
+# A sealed state is one sealed file, state.sealed, in place of the redb file state.redb.
 state=$HOME/.local/share/hushphone/state
 sealed() {
-    grep -q sealed "$state/state.redb"
+    test -e "$state/state.sealed" && test ! -e "$state/state.redb" &&
+        test "$(head -c 8 "$state/state.sealed")" = PHSTATE1
 }
 
 # No keyring: the state stays unsealed.
@@ -45,7 +46,7 @@ env -u DBUS_SESSION_BUS_ADDRESS timeout 15 hushphone --memory --name ci || rc=$?
 test "$rc" = 124 || { echo "hushphone stopped ($rc) under the profile" >&2; exit 1; }
 undenied "$start"
 test -e "$state/state.redb" || { echo "no state was made" >&2; exit 1; }
-if sealed; then
+if test -e "$state/state.sealed"; then
     echo "no keyring, yet the state is sealed" >&2
     exit 1
 fi
@@ -68,6 +69,6 @@ dbus-run-session -- sh -eu -c '
 ' sh "$state"
 undenied "$start"
 sealed || { echo "the state was not sealed" >&2; exit 1; }
-test ! -e "$state.old" && test ! -e "$state.new"
+test ! -e "$state/.sealing" || { echo "the sealing was not finished" >&2; exit 1; }
 
 echo "apparmor: ok"
