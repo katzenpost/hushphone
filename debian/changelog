@@ -1,3 +1,12 @@
+hushphone (0.1.2) unstable; urgency=medium
+
+  * Keep the data directory its owner's alone; the process cannot be dumped or traced.
+  * On Android, keep the state out of backups and device transfers.
+  * Read caps, write caps and voucher secrets in guarded memory, wiped on drop.
+  * Use pigeonhole_protocols, now one crate.
+
+ -- Katzenpost <packages@katzenpost.network>  Thu, 29 Oct 2026 00:09:22 +0000
+
 hushphone (0.1.1) unstable; urgency=medium
 
   * Join through katzenqt voucher replies without rosters, and retry voucher reads that fail.
