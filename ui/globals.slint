@@ -42,6 +42,13 @@ export struct LineItem {
     collapsed: bool,
 }
 
+// A file in the send directory, for the user to pick to send.
+export struct AttachItem {
+    name: string,
+    size: string,
+    too-large: bool,
+}
+
 export struct MemberItem {
     key: string,
     fingerprint: string,
@@ -77,6 +84,10 @@ export global AppState {
     in property <string> at-rest-warning;
     in property <string> notice;
     in property <bool> notice-error;
+    // The files directory, for the hints; empty where the system picks files instead.
+    in property <string> files-dir;
+    // What is in the send directory, when asked.
+    in property <[AttachItem]> attachable;
 }
 
 // What the UI asks of the host.
@@ -86,13 +97,15 @@ export global Actions {
     callback create-group(string);
     callback join-group(string);
     callback invite(string);
-    callback attach-file();
+    // List the files that can be sent, or open the system's picker where there is one.
+    callback open-attach();
+    // Send the file of that name from the send directory.
+    callback attach-file(string);
     callback ptt-start();
     callback ptt-stop();
     callback ptt-cancel();
     callback toggle-voice(int);
     callback save-file(int);
-    callback open-file(int);
     callback expand(int);
     callback copy-code();
     callback paste-code() -> string;

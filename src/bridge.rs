@@ -14,10 +14,13 @@ use tokio::sync::mpsc::UnboundedSender;
 use zeroize::Zeroizing;
 
 use crate::backend::{self, Attachments, Cmd, Keys, Link, Source, Update};
+use crate::contacts::Contacts;
 use crate::model::{self, Files};
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
-use crate::{Actions, AppState, AppWindow, ChatItem, Connection, LineItem, MemberItem, Overlay, Theme, ThemePreference, effects, text};
+use crate::{
+    Actions, AppState, AppWindow, AttachItem, ChatItem, Connection, LineItem, MemberItem, Overlay, Theme, ThemePreference, effects, text,
+};
 
 /// Proof that an effect was asked for by the user, through the UI. Only this module can make
 /// one, and only in the UI's callbacks.
@@ -25,6 +28,11 @@ pub struct UserIntent(());
 
 impl UserIntent {
     fn new() -> UserIntent {
+        UserIntent(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test() -> UserIntent {
         UserIntent(())
     }
 }
@@ -41,6 +49,9 @@ struct ChatState {
 pub struct Setup {
     pub data_dir: PathBuf,
     pub cache_dir: PathBuf,
+    /// The user's files directory, with `send/` and `received/`; unused where the system
+    /// picks files instead.
+    pub files_dir: PathBuf,
     pub source: Source,
     pub default_daemon: String,
     /// A name given on the command line, for a first start without asking.
@@ -55,6 +66,8 @@ struct App {
     ui: slint::Weak<AppWindow>,
     setup: Setup,
     settings: Settings,
+    /// Petnames and what was read, kept with the state; saved once the state's files are open.
+    contacts: Contacts,
     cmd: Option<UnboundedSender<Cmd>>,
     effects: tokio::runtime::Runtime,
     chats: BTreeMap<ChatId, ChatState>,
@@ -72,6 +85,7 @@ struct App {
     chat_model: Rc<VecModel<ChatItem>>,
     line_model: Rc<VecModel<LineItem>>,
     member_model: Rc<VecModel<MemberItem>>,
+    attach_model: Rc<VecModel<AttachItem>>,
     timer: slint::Timer,
     /// The sockets the sandbox allows, once it is on.
     #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -98,9 +112,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     if let Err(e) = crate::harden::data_dir(&setup.data_dir) {
         eprintln!("hushphone: can't restrict {}: {e}", setup.data_dir.display());
     }
-    // Files handed to other programs last time, written out unsealed.
-    effects::clear_opened(&setup.cache_dir.join("open"));
-    let mut settings = Settings::load(&setup.data_dir);
+    let (mut settings, settings_note) = Settings::load(&setup.data_dir);
     if settings.name.is_empty()
         && let Some(n) = &setup.name
     {
@@ -113,12 +125,15 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     let chat_model = Rc::new(VecModel::default());
     let line_model = Rc::new(VecModel::default());
     let member_model = Rc::new(VecModel::default());
+    let attach_model = Rc::new(VecModel::default());
     let start = std::time::Instant::now();
     ui.global::<crate::Clock>().on_now(move || start.elapsed().as_millis() as i64);
     let st = ui.global::<AppState>();
     st.set_chats(ModelRc::from(chat_model.clone()));
     st.set_lines(ModelRc::from(line_model.clone()));
     st.set_members(ModelRc::from(member_model.clone()));
+    st.set_attachable(ModelRc::from(attach_model.clone()));
+    st.set_files_dir(if cfg!(target_os = "android") { String::new() } else { setup.files_dir.display().to_string() }.into());
     st.set_daemon(settings.daemon.clone().into());
     st.set_my_name(settings.name.clone().into());
     ui.global::<Theme>().set_preference(match settings.theme {
@@ -131,6 +146,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         ui: ui.as_weak(),
         setup,
         settings,
+        contacts: Contacts::default(),
         cmd: None,
         effects: tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
@@ -149,6 +165,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         chat_model,
         line_model,
         member_model,
+        attach_model,
         timer: slint::Timer::default(),
         #[cfg(any(target_os = "linux", target_os = "android"))]
         net: None,
@@ -156,6 +173,9 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     APP.with(|a| *a.borrow_mut() = Some(app));
     wire(ui);
     with_app(|app| {
+        if let Some(why) = settings_note {
+            app.notice(&why, true);
+        }
         if app.settings.name.is_empty() {
             if let Some(ui) = app.ui.upgrade() {
                 ui.set_overlay(Overlay::FirstRun);
@@ -243,8 +263,8 @@ fn wire(ui: &AppWindow) {
     });
     a.on_set_petname(|key, name| {
         with_app(|app| {
-            app.settings.set_petname(&key, &name);
-            if let Err(e) = app.settings.save(&app.setup.data_dir) {
+            app.contacts.set_petname(&key, &name);
+            if let Err(e) = app.save_contacts() {
                 app.notice(&format!("Couldn't save the name: {e}"), true);
             }
             app.render_all();
@@ -295,50 +315,14 @@ fn wire(ui: &AppWindow) {
             .unwrap_or_default()
             .into()
     });
-    a.on_attach_file(|| {
-        with_app(|app| {
-            let Some(chat) = app.current.clone() else { return };
-            let intent = UserIntent::new();
-            app.effects.spawn(async move {
-                let r = effects::pick_file(intent).await;
-                later(move |app| match r {
-                    Ok(Some(f)) => {
-                        // The group the file was picked for must still be there to send it.
-                        if app.joined(&chat) {
-                            app.send(Cmd::SendFile(chat, text::identifier(&f.name, 200), f.bytes));
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => app.notice(&e, true),
-                });
-            });
-        });
+    a.on_open_attach(|| {
+        with_app(|app| app.open_attach(UserIntent::new()));
+    });
+    a.on_attach_file(|name| {
+        with_app(|app| app.attach(UserIntent::new(), name.to_string()));
     });
     a.on_save_file(|line| {
-        with_app(|app| {
-            let Some((bytes, name)) = app.attachment(line as usize) else { return };
-            let intent = UserIntent::new();
-            app.effects.spawn(async move {
-                let r = effects::save_file(intent, bytes, name).await;
-                later(move |app| match r {
-                    Ok(true) => app.notice("Saved.", false),
-                    Ok(false) => {}
-                    Err(e) => app.notice(&format!("Couldn't save: {e}"), true),
-                });
-            });
-        });
-    });
-    a.on_open_file(|line| {
-        with_app(|app| {
-            let Some((bytes, name)) = app.attachment(line as usize) else { return };
-            let intent = UserIntent::new();
-            let dir = app.setup.cache_dir.join("open");
-            app.effects.spawn(async move {
-                if let Err(e) = effects::open_with(intent, bytes, name, dir).await {
-                    later(move |app| app.notice(&format!("Couldn't open: {e}"), true));
-                }
-            });
-        });
+        with_app(|app| app.save(UserIntent::new(), line as usize));
     });
     a.on_toggle_voice(|line| {
         with_app(|app| app.toggle_voice(line as usize));
@@ -397,8 +381,11 @@ impl App {
                 Source::Daemon(a) => Net::for_daemon(a),
                 _ => Net::Unix,
             };
+            // Without the filter the app does not go on: HUSHPHONE_SANDBOX=off is the way
+            // to run without it, on purpose.
             if let Err(e) = sandbox::enter(net) {
-                self.notice(&format!("Couldn't sandbox the app: {e}"), true);
+                self.notice(&format!("Couldn't sandbox the app, so it stays off the daemon: {e}. Set HUSHPHONE_SANDBOX=off to run without the sandbox."), true);
+                return;
             }
             self.net = Some(net);
         }
@@ -422,7 +409,19 @@ impl App {
     fn apply(&mut self, u: Update) {
         match u {
             Update::Files(a, unsealed) => {
+                match Contacts::load(&a) {
+                    Ok(c) => self.contacts = c,
+                    Err(e) => self.notice(&format!("Couldn't read your names for members: {e}"), true),
+                }
                 self.attachments = Some(a);
+                // What an older version kept in the settings moves in with the state.
+                if self.contacts.adopt(&mut self.settings) {
+                    if let Err(e) = self.save_contacts() {
+                        self.notice(&format!("Couldn't move your names for members: {e}"), true);
+                    } else {
+                        let _ = self.settings.save(&self.setup.data_dir);
+                    }
+                }
                 self.state(|s| s.set_at_rest_warning(unsealed.map_or_else(String::new, |why| {
                     format!("Your chats are stored unencrypted on this device: {why}.")
                 }).into()));
@@ -448,10 +447,16 @@ impl App {
                     });
                 }
             }
-            Update::Chat { view, from, lines, dropped, paths } => {
+            Update::Chat { view, from, lines, dropped, paths, files } => {
                 let id = view.id.clone();
                 self.paths.extend(paths);
-                let seen = self.settings.seen.get(&id).copied().unwrap_or(0);
+                for (file, info) in files {
+                    self.files.types.insert(file.clone(), info.kind);
+                    if let Some(d) = info.duration {
+                        self.files.durations.insert(file, d);
+                    }
+                }
+                let seen = self.contacts.seen.get(&id).copied().unwrap_or(0);
                 let c = self.chats.entry(id.clone()).or_insert_with(|| ChatState { seen, ..Default::default() });
                 c.view = Some(view);
                 if from != usize::MAX {
@@ -464,7 +469,6 @@ impl App {
                     c.seen = c.lines.last().map_or(0, |l| l.line.id);
                     self.remember_seen(&id);
                 }
-                self.learn_files(&id);
                 self.render_chats();
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.render_current();
@@ -472,8 +476,8 @@ impl App {
             }
             Update::Removed(id) => {
                 self.chats.remove(&id);
-                if self.settings.seen.remove(&id).is_some() {
-                    let _ = self.settings.save(&self.setup.data_dir);
+                if self.contacts.seen.remove(&id).is_some() {
+                    let _ = self.save_contacts();
                 }
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.current = None;
@@ -499,23 +503,99 @@ impl App {
         }
     }
 
-    /// Voice clip lengths and file types, for the files that have arrived.
-    fn learn_files(&mut self, id: &str) {
-        let Some(c) = self.chats.get(id) else { return };
-        for a in c.lines.iter().filter_map(|l| l.line.attachment.as_ref()) {
-            if self.files.types.contains_key(&a.file) {
-                continue;
-            }
-            let Some(path) = self.paths.get(&a.file) else { continue };
-            if !path.exists() {
-                continue;
-            }
-            let Some(Ok(b)) = self.attachments.as_ref().map(|f| f.read(&a.file)) else { continue };
-            self.files.types.insert(a.file.clone(), effects::sniff(&b));
-            if voice::is_voice(&a.filetype, &a.name) {
-                self.files.durations.insert(a.file.clone(), voice::duration(&b).unwrap_or_default());
-            }
+    fn save_contacts(&self) -> Result<(), String> {
+        match &self.attachments {
+            Some(a) => self.contacts.save(a),
+            None => Err("the state is not open yet".into()),
         }
+    }
+
+    /// Show what is in the send directory, for the user to pick from; where the system has a
+    /// picker of its own, open that instead.
+    fn open_attach(&mut self, intent: UserIntent) {
+        let Some(chat) = self.current.clone() else { return };
+        if !self.joined(&chat) {
+            return;
+        }
+        if cfg!(target_os = "android") {
+            self.attach(intent, String::new());
+            return;
+        }
+        let dir = self.setup.files_dir.clone();
+        self.effects.spawn(async move {
+            let r = effects::list_files(&intent, &dir);
+            later(move |app| match r {
+                Ok(entries) => {
+                    let items = entries
+                        .into_iter()
+                        .map(|e| AttachItem {
+                            name: e.name.into(),
+                            size: text::file_size(e.size as usize).into(),
+                            too_large: e.size > effects::FILE_MAX,
+                        })
+                        .collect();
+                    sync(&app.attach_model, items);
+                    if let Some(ui) = app.ui.upgrade() {
+                        ui.set_overlay(Overlay::Attach);
+                    }
+                }
+                Err(e) => app.notice(&format!("Couldn't read {}: {e}", dir.join(effects::SEND).display()), true),
+            });
+        });
+    }
+
+    /// Send the file `name` from the send directory to the current group; on Android, the
+    /// file the system's picker hands over.
+    fn attach(&mut self, intent: UserIntent, name: String) {
+        let Some(chat) = self.current.clone() else { return };
+        if !self.joined(&chat) {
+            return;
+        }
+        let dir = self.setup.files_dir.clone();
+        self.effects.spawn(async move {
+            #[cfg(not(target_os = "android"))]
+            let r = effects::pick_file(&intent, &dir, &name).map(Some);
+            #[cfg(target_os = "android")]
+            let r = {
+                let _ = (&dir, &name);
+                tokio::task::spawn_blocking(move || crate::android::pick_document(&intent)).await.unwrap_or_else(|e| Err(e.to_string()))
+            };
+            later(move |app| match r {
+                // The group the file was picked for must still be there to send it.
+                Ok(Some(f)) if app.joined(&chat) => app.send(Cmd::SendFile(chat, f.name, f.bytes)),
+                Ok(Some(_)) => app.notice("The group is gone: the file was not sent.", true),
+                Ok(None) => {}
+                Err(e) => app.notice(&e, true),
+            });
+        });
+    }
+
+    /// Save a line's attachment, read and written off this thread.
+    fn save(&mut self, intent: UserIntent, line: usize) {
+        let Some((file, name)) = self.attachment(line) else { return };
+        let Some(att) = self.attachments.clone() else { return };
+        let dir = self.setup.files_dir.clone();
+        self.effects.spawn(async move {
+            let r = tokio::task::spawn_blocking(move || {
+                let bytes = att.read(&file).map_err(|e| e.to_string())?;
+                #[cfg(not(target_os = "android"))]
+                {
+                    effects::save_file(&intent, &dir, &name, &bytes).map(|p| Some(format!("Saved as {}.", p.display())))
+                }
+                #[cfg(target_os = "android")]
+                {
+                    let _ = &dir;
+                    crate::android::create_document(&intent, &name, &bytes).map(|saved| saved.then(|| "Saved.".to_string()))
+                }
+            })
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+            later(move |app| match r {
+                Ok(Some(said)) => app.notice(&said, false),
+                Ok(None) => {}
+                Err(e) => app.notice(&format!("Couldn't save: {e}"), true),
+            });
+        });
     }
 
     fn select(&mut self, id: String) {
@@ -536,22 +616,22 @@ impl App {
 
     fn remember_seen(&mut self, id: &str) {
         let Some(seen) = self.chats.get(id).map(|c| c.seen) else { return };
-        if self.settings.seen.get(id) != Some(&seen) {
-            self.settings.seen.insert(id.to_string(), seen);
-            let _ = self.settings.save(&self.setup.data_dir);
+        if self.contacts.seen.get(id) != Some(&seen) {
+            self.contacts.seen.insert(id.to_string(), seen);
+            let _ = self.save_contacts();
         }
     }
 
-    /// A line's attachment, opened, and the name to give it; `None` until it has arrived.
-    fn attachment(&self, line: usize) -> Option<(Zeroizing<Vec<u8>>, String)> {
+    /// A line's attachment: its file in the state, and the name to give it; `None` until it has
+    /// arrived.
+    fn attachment(&self, line: usize) -> Option<(String, String)> {
         let c = self.chats.get(self.current.as_ref()?)?;
         let l = c.lines.iter().find(|l| l.line.id == line)?;
         let a = l.line.attachment.as_ref()?;
         if !self.paths.get(&a.file)?.exists() {
             return None;
         }
-        let bytes = self.attachments.as_ref()?.read(&a.file).ok()?;
-        Some((bytes, text::identifier(&a.name, 200)))
+        Some((a.file.clone(), text::identifier(&a.name, 200)))
     }
 
     fn render_all(&mut self) {
@@ -566,7 +646,7 @@ impl App {
             .values()
             .filter_map(|c| {
                 let v = c.view.as_ref()?;
-                let who = model::names(v, &self.settings, &self.settings.name);
+                let who = model::names(v, &self.contacts, &self.settings.name);
                 let last = c.lines.iter().rev().find(|l| l.line.notice.is_none());
                 let unread = if self.current.as_deref() == Some(v.id.as_str()) {
                     0
@@ -592,7 +672,7 @@ impl App {
             return;
         };
         let Some(v) = c.view.as_ref() else { return };
-        let who = model::names(v, &self.settings, &self.settings.name);
+        let who = model::names(v, &self.contacts, &self.settings.name);
         let mut items = model::line_items(&c.lines, &who, &self.files, &self.expanded, chrono::Local::now());
         if let Some(p) = &self.voice.playing
             && p.chat == v.id
@@ -620,7 +700,8 @@ impl App {
             self.render_current();
             return;
         }
-        let Some((bytes, _)) = self.attachment(line) else {
+        let bytes = self.attachment(line).and_then(|(file, _)| self.attachments.as_ref()?.read(&file).ok());
+        let Some(bytes) = bytes else {
             self.notice("That voice message hasn't arrived yet.", true);
             return;
         };
@@ -661,8 +742,10 @@ impl App {
         let Some(chat) = self.recording_for.take() else { return };
         self.voice.stop(move |r| {
             later(move |app| match r {
-                // The client keeps what it sends sealed, but takes it as a plain Vec.
-                Ok(Some(clip)) if app.joined(&chat) => app.send(Cmd::SendFile(chat, clip.name, clip.audio.bytes().to_vec())),
+                // The copy for the client is wiped once it has taken it.
+                Ok(Some(clip)) if app.joined(&chat) => {
+                    app.send(Cmd::SendFile(chat, clip.name, Zeroizing::new(clip.audio.bytes().to_vec())))
+                }
                 Ok(Some(_)) => app.notice("The group is gone: the voice message was not sent.", true),
                 Ok(None) => app.notice("Too short to send: hold the button while you talk.", false),
                 Err(e) => app.notice(&format!("Couldn't record: {e}"), true),

@@ -4,12 +4,14 @@
 //! the system's keyring, through [`crate::keys`].
 
 use std::collections::{BTreeSet, HashMap};
+
 use std::path::PathBuf;
 use std::time::Duration;
 
+use pigeonhole_protocols::protocols::katzenqt1::client::sealed_file::{seal_file, write_in_place};
 use pigeonhole_protocols::protocols::katzenqt1::client::store::StoreFiles;
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, Files, LineView};
-use pigeonhole_protocols::protocols::katzenqt1::engine::{Attachment, ChatId};
+use pigeonhole_protocols::protocols::katzenqt1::engine::ChatId;
 use pigeonhole_protocols::secret::Secret;
 use pigeonhole_protocols::transport::Backend;
 use pigeonhole_protocols::transport::remote::Remote;
@@ -43,13 +45,65 @@ pub enum Keys {
     Given(Secret),
 }
 
-/// The files the state keeps, opened if it is sealed.
-pub struct Attachments(StoreFiles);
+/// The files the state keeps, read and written sealed when the state is.
+#[derive(Clone)]
+pub struct Attachments {
+    dir: PathBuf,
+    key: Option<Secret>,
+}
+
+/// Why a file could not be read: not there, or something else.
+#[derive(Debug)]
+pub struct ReadError {
+    pub not_found: bool,
+    pub what: String,
+}
+
+impl std::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.what)
+    }
+}
 
 impl Attachments {
-    pub fn read(&self, file: &str) -> Result<Zeroizing<Vec<u8>>, String> {
-        self.0.read(file).map(Zeroizing::new).map_err(|e| e.to_string())
+    pub fn new(dir: PathBuf, key: Option<Secret>) -> Attachments {
+        Attachments { dir, key }
     }
+
+    pub fn read(&self, file: &str) -> Result<Zeroizing<Vec<u8>>, ReadError> {
+        StoreFiles::new(self.dir.clone(), self.key.clone()).read(file).map(Zeroizing::new).map_err(|e| ReadError {
+            not_found: e.kind() == std::io::ErrorKind::NotFound,
+            what: e.to_string(),
+        })
+    }
+
+    /// Write `bytes` as the file `name` right under the state directory, sealed if the state
+    /// is, in place of any file there.
+    pub fn write(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
+        let mut parts = std::path::Path::new(name).components();
+        if !matches!((parts.next(), parts.next()), (Some(std::path::Component::Normal(_)), None)) {
+            return Err(format!("{name:?} is not a file in the state directory"));
+        }
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        let sealed;
+        let out = match &self.key {
+            Some(k) => {
+                sealed = seal_file(k, bytes);
+                sealed.as_slice()
+            }
+            None => bytes,
+        };
+        write_in_place(&self.dir.join(name), out, false).map_err(|e| e.to_string())
+    }
+}
+
+/// What a received file's bytes say about it, found once it has arrived.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileInfo {
+    /// Its type, from its bytes.
+    pub kind: String,
+    /// Its length, if it is a voice clip.
+    pub duration: Option<Duration>,
 }
 
 impl std::fmt::Debug for Attachments {
@@ -75,7 +129,7 @@ pub enum Cmd {
     Join(String, u64),
     Invite(ChatId, String),
     Send(ChatId, String),
-    SendFile(ChatId, String, Vec<u8>),
+    SendFile(ChatId, String, Zeroizing<Vec<u8>>),
     Scan(ChatId),
     Remove(ChatId, Vec<u8>),
     Leave(ChatId),
@@ -97,6 +151,8 @@ pub enum Update {
         lines: Vec<LineView>,
         dropped: Vec<usize>,
         paths: Vec<(String, PathBuf)>,
+        /// What the files that have arrived hold, by file, for those not told of before.
+        files: Vec<(String, FileInfo)>,
     },
     Removed(ChatId),
     /// A group made at the user's request; `ticket` is the request's.
@@ -149,7 +205,7 @@ async fn key(p: &Params, tell: &impl Fn(Update)) -> Result<Option<Secret>, Strin
     if let Some(k) = &key {
         keys::seal_existing(&p.state_dir, k).map_err(|e| format!("Couldn't seal your chats: {e}."))?;
     }
-    tell(Update::Files(Attachments(StoreFiles::new(p.state_dir.clone(), key.clone())), unsealed));
+    tell(Update::Files(Attachments::new(p.state_dir.clone(), key.clone()), unsealed));
     Ok(key)
 }
 
@@ -171,6 +227,7 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
             return;
         }
     };
+    let att = Attachments::new(p.state_dir.clone(), key.clone());
     let cfg = || Config {
         state_dir: p.state_dir.clone(),
         name: p.name.clone(),
@@ -181,11 +238,11 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
     match &p.source {
         Source::Memory(w) => {
             tell(Update::Link(Link::Online));
-            serve(cfg(), w.clone(), None, &mut rx, &tell).await;
+            serve(cfg(), w.clone(), None, &att, &mut rx, &tell).await;
         }
         Source::SimSocket(s) => {
             tell(Update::Link(Link::Online));
-            serve(cfg(), Remote { socket: s.clone() }, None, &mut rx, &tell).await;
+            serve(cfg(), Remote { socket: s.clone() }, None, &att, &mut rx, &tell).await;
         }
         Source::Daemon(addr) => {
             let mut wait = Duration::from_secs(1);
@@ -196,7 +253,7 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
                         let thin = b.client.clone();
                         // A client that stops, or panics, is opened again on a new connection
                         // rather than leaving the app without its groups.
-                        let served = std::panic::AssertUnwindSafe(serve(cfg(), b, Some(thin.clone()), &mut rx, &tell))
+                        let served = std::panic::AssertUnwindSafe(serve(cfg(), b, Some(thin.clone()), &att, &mut rx, &tell))
                             .catch_unwind()
                             .await;
                         thin.stop().await;
@@ -225,29 +282,56 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
     }
 }
 
-/// The lines of a group from the one before `first` on.
-async fn lines_from(c: &Client, id: &str, first: usize) -> (Vec<LineView>, Vec<(String, PathBuf)>) {
+/// The files told of already, so that each is read once.
+type Known = std::collections::HashSet<String>;
+
+/// The lines of a group from the one before `first` on, where their files are, and what the
+/// files that have arrived hold, read here rather than on the UI's thread.
+async fn lines_from(c: &Client, id: &str, first: usize, att: &Attachments, known: &mut Known) -> Lines {
     let lines = c.lines(id, first.checked_sub(1)).await.unwrap_or_default();
-    let paths = lines
-        .iter()
-        .filter_map(|l| l.line.attachment.as_ref())
-        .map(|a: &Attachment| (a.file.clone(), c.file_path(a)))
-        .collect();
-    (lines, paths)
+    let mut paths = Vec::new();
+    let mut files = Vec::new();
+    for a in lines.iter().filter_map(|l| l.line.attachment.as_ref()) {
+        let path = c.file_path(a);
+        if !known.contains(&a.file)
+            && path.exists()
+            && let Ok(bytes) = att.read(&a.file)
+        {
+            let kind = crate::effects::sniff(&bytes);
+            let duration = crate::voice::is_voice(&a.filetype, &a.name).then(|| crate::voice::duration(&bytes)).flatten();
+            known.insert(a.file.clone());
+            files.push((a.file.clone(), FileInfo { kind, duration }));
+        }
+        paths.push((a.file.clone(), path));
+    }
+    Lines { lines, paths, files }
+}
+
+struct Lines {
+    lines: Vec<LineView>,
+    paths: Vec<(String, PathBuf)>,
+    files: Vec<(String, FileInfo)>,
 }
 
 /// Our own lines not yet acknowledged, by group: an acknowledgement changes a line without the
 /// client's event naming it, so updates are read from the oldest of these on.
 type Unacked = HashMap<ChatId, BTreeSet<usize>>;
 
-async fn send_chat(c: &Client, id: &str, first: usize, dropped: Vec<usize>, unacked: &mut Unacked, tell: &impl Fn(Update)) {
+/// What serving a client carries along.
+struct Serving<'a> {
+    att: &'a Attachments,
+    known: Known,
+    unacked: Unacked,
+}
+
+async fn send_chat(c: &Client, id: &str, first: usize, dropped: Vec<usize>, s: &mut Serving<'_>, tell: &impl Fn(Update)) {
     let Ok(view) = c.chat(id).await else { return };
-    let waiting = unacked.entry(id.to_string()).or_default();
+    let waiting = s.unacked.entry(id.to_string()).or_default();
     let first = waiting.first().map_or(first, |&u| u.min(first));
-    let (lines, paths) = lines_from(c, id, first).await;
+    let Lines { lines, paths, files } = lines_from(c, id, first, s.att, &mut s.known).await;
     waiting.retain(|&u| u < first);
     waiting.extend(lines.iter().filter(|l| l.mine && !l.acked).map(|l| l.line.id));
-    tell(Update::Chat { view, from: first, lines, dropped, paths });
+    tell(Update::Chat { view, from: first, lines, dropped, paths, files });
 }
 
 /// How serving a client ended.
@@ -262,6 +346,7 @@ async fn serve<B: Backend>(
     cfg: Config,
     backend: B,
     thin: Option<std::sync::Arc<katzenpost_thin_client::ThinClient>>,
+    att: &Attachments,
     rx: &mut mpsc::UnboundedReceiver<Cmd>,
     tell: &impl Fn(Update),
 ) -> Served {
@@ -278,9 +363,9 @@ async fn serve<B: Backend>(
     };
     let mut served = Served::Quit;
     let mut events = c.subscribe();
-    let mut unacked = Unacked::new();
+    let mut s = Serving { att, known: Known::new(), unacked: Unacked::new() };
     for ch in c.chats().await.unwrap_or_default() {
-        send_chat(&c, &ch.id, 0, Vec::new(), &mut unacked, tell).await;
+        send_chat(&c, &ch.id, 0, Vec::new(), &mut s, tell).await;
     }
     let mut link = None;
     let mut tick = tokio::time::interval(Duration::from_secs(2));
@@ -288,7 +373,7 @@ async fn serve<B: Backend>(
         tokio::select! {
             cmd = rx.recv() => {
                 let Some(cmd) = cmd else { break };
-                if let Err(e) = carry_out(&c, cmd, &mut unacked, tell).await {
+                if let Err(e) = carry_out(&c, cmd, &mut s, tell).await {
                     tell(Update::Failed(sentence(&e)));
                 }
             }
@@ -319,7 +404,7 @@ async fn serve<B: Backend>(
                         tell(Update::Removed(id));
                     } else {
                         let first = lines.first().copied().unwrap_or(usize::MAX);
-                        send_chat(&c, &id, first, dropped, &mut unacked, tell).await;
+                        send_chat(&c, &id, first, dropped, &mut s, tell).await;
                     }
                 }
             }
@@ -340,31 +425,34 @@ async fn serve<B: Backend>(
     served
 }
 
-async fn carry_out(c: &Client, cmd: Cmd, unacked: &mut Unacked, tell: &impl Fn(Update)) -> Result<(), ClientError> {
+async fn carry_out(c: &Client, cmd: Cmd, s: &mut Serving<'_>, tell: &impl Fn(Update)) -> Result<(), ClientError> {
     match cmd {
         Cmd::Create(name, ticket) => {
             let id = c.create(&name).await?;
-            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
+            send_chat(c, &id, 0, Vec::new(), s, tell).await;
             tell(Update::Made(id, ticket));
         }
         Cmd::Join(name, ticket) => {
             let id = c.join(&name).await?;
-            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
+            send_chat(c, &id, 0, Vec::new(), s, tell).await;
             tell(Update::Made(id, ticket));
         }
         Cmd::Invite(id, code) => c.invite(&id, code.trim()).await?,
         Cmd::Send(id, text) => c.send(&id, &text).await?,
-        Cmd::SendFile(id, name, bytes) => c.send_file(&id, &name, bytes).await?,
+        Cmd::SendFile(id, name, mut bytes) => {
+            // The client takes a plain vector and seals it; the wiped buffer stays behind.
+            c.send_file(&id, &name, std::mem::take(&mut *bytes)).await?
+        }
         Cmd::Scan(id) => c.scan(&id).await?,
         Cmd::Remove(id, key) => c.remove(&id, key).await?,
         Cmd::Leave(id) => c.leave(&id).await?,
         Cmd::Clear(id) => {
             c.clear(&id).await?;
-            send_chat(c, &id, 0, Vec::new(), unacked, tell).await;
+            send_chat(c, &id, 0, Vec::new(), s, tell).await;
         }
         Cmd::Rename(id, to) => {
             c.rename(&id, &to).await?;
-            send_chat(c, &id, usize::MAX, Vec::new(), unacked, tell).await;
+            send_chat(c, &id, usize::MAX, Vec::new(), s, tell).await;
         }
     }
     Ok(())

@@ -26,8 +26,7 @@ Depends: ${shlibs:Depends},
          libxi6,
          libxkbcommon-x11-0,
          libxkbcommon0
-Recommends: katzenpost,
-            xdg-desktop-portal
+Recommends: katzenpost
 Suggests: apparmor
 Description: group chat with push-to-talk voice over the Katzenpost mixnet
  hushphone is a group chat client for the Katzenpost mix network, with

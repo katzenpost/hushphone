@@ -13,24 +13,48 @@ pub const BODY_MAX: usize = 64 * 1024;
 /// Bodies with more lines than this start collapsed.
 pub const LINES_MAX: usize = 20;
 
-fn is_bidi_control(c: char) -> bool {
-    matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{200E}' | '\u{200F}' | '\u{061C}')
+/// Unicode's Default_Ignorable_Code_Point: characters rendered as nothing, such as bidi
+/// controls, joiners, variation selectors, fillers and tags. Two names that differ only in these
+/// look the same, so they are dropped. The ranges are those of DerivedCoreProperties.txt.
+fn is_default_ignorable(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00AD}'
+            | '\u{034F}'
+            | '\u{061C}'
+            | '\u{115F}'..='\u{1160}'
+            | '\u{17B4}'..='\u{17B5}'
+            | '\u{180B}'..='\u{180F}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{206F}'
+            | '\u{3164}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{FFA0}'
+            | '\u{FFF0}'..='\u{FFF8}'
+            | '\u{1BCA0}'..='\u{1BCA3}'
+            | '\u{1D173}'..='\u{1D17A}'
+            | '\u{E0000}'..='\u{E0FFF}'
+    )
 }
 
-fn is_hidden(c: char) -> bool {
-    matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}'..='\u{2064}' | '\u{FEFF}' | '\u{180E}' | '\u{E0000}'..='\u{E007F}')
-}
-
-/// A name or file name for one line of display: no bidi controls, invisible characters or line
-/// breaks, and at most `max` characters.
+/// A name or file name for one line of display: no invisible characters or line breaks, runs of
+/// whitespace made one space, and at most `max` characters.
 pub fn identifier(s: &str, max: usize) -> String {
-    let mut out: String = s
-        .chars()
-        .filter(|&c| !is_bidi_control(c) && !is_hidden(c))
-        .map(|c| if c.is_control() || matches!(c, '\u{2028}' | '\u{2029}' | '\u{85}') { '\u{FFFD}' } else { c })
-        .collect::<String>()
-        .trim()
-        .to_string();
+    let mut out = String::with_capacity(s.len());
+    let mut space = false;
+    for c in s.chars().filter(|&c| !is_default_ignorable(c)) {
+        if c.is_whitespace() {
+            space = true;
+            continue;
+        }
+        if space && !out.is_empty() {
+            out.push(' ');
+        }
+        space = false;
+        out.push(if c.is_control() { '\u{FFFD}' } else { c });
+    }
     if out.chars().count() > max {
         out = out.chars().take(max - 1).collect::<String>() + "…";
     }
@@ -98,9 +122,10 @@ pub fn initial(s: &str) -> String {
         .unwrap_or_else(|| "?".into())
 }
 
-/// A short, stable fingerprint of a member's key.
+/// A stable fingerprint of a member's key: 64 bits, so that a member cannot make a key whose
+/// fingerprint matches another's.
 pub fn fingerprint(key: &[u8]) -> String {
-    hex::encode(&Sha256::digest(key)[..4])
+    hex::encode(&Sha256::digest(key)[..8])
 }
 
 /// A tint index picked by the key, so that a member cannot choose their own colour.
@@ -142,8 +167,18 @@ mod tests {
         let n = name(&"x".repeat(50));
         assert_eq!(n.chars().count(), NAME_MAX);
         assert!(n.ends_with('…'));
-        assert_eq!(name("bob\u{2028}admin"), "bob\u{FFFD}admin");
+        assert_eq!(name("bob\u{2028}admin"), "bob admin");
+        assert_eq!(name("bob\u{1b}admin"), "bob\u{FFFD}admin");
         assert_eq!(name("\u{200B}"), "?");
+        assert_eq!(name("  a \t\n  lice "), "a lice");
+    }
+
+    #[test]
+    fn invisible_characters_cannot_make_two_names_look_alike() {
+        for c in ['\u{00AD}', '\u{034F}', '\u{115F}', '\u{180E}', '\u{FE0F}', '\u{206A}', '\u{3164}', '\u{E0041}'] {
+            assert_eq!(name(&format!("ali{c}ce")), "alice", "{c:?}");
+        }
+        assert_eq!(fingerprint(b"k").len(), 16);
     }
 
     #[test]

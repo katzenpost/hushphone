@@ -1,4 +1,6 @@
-//! The user's own settings, and the names they gave members, in a small TOML file.
+//! The user's own settings, in a small TOML file that is not sealed: the name, the daemon's
+//! address and the theme. The names the user gives members, and what they have read, are kept
+//! sealed with the state instead, in [`crate::contacts`].
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -21,9 +23,12 @@ pub struct Settings {
     pub name: String,
     pub daemon: String,
     pub theme: ThemeChoice,
-    /// Our own names for members, by the hex of their key.
+    /// Where an older version kept petnames; moved into the sealed contacts at start and
+    /// emptied.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub petnames: BTreeMap<String, String>,
-    /// The last line read in each group, so unread counts survive a restart.
+    /// Likewise, the last line read in each group.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub seen: BTreeMap<String, usize>,
 }
 
@@ -32,12 +37,22 @@ impl Settings {
         data_dir.join("settings.toml")
     }
 
-    /// The settings in `data_dir`, or defaults when there are none yet.
-    pub fn load(data_dir: &Path) -> Settings {
-        std::fs::read_to_string(Self::path(data_dir))
-            .ok()
-            .and_then(|s| toml::from_str(&s).ok())
-            .unwrap_or_default()
+    /// The settings in `data_dir`, or defaults when there are none yet. A file that cannot be
+    /// read is moved aside, and why is returned for the user.
+    pub fn load(data_dir: &Path) -> (Settings, Option<String>) {
+        let path = Self::path(data_dir);
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => return (Settings::default(), None),
+        };
+        match toml::from_str(&text) {
+            Ok(s) => (s, None),
+            Err(e) => {
+                let aside = path.with_extension("toml.broken");
+                let _ = std::fs::rename(&path, &aside);
+                (Settings::default(), Some(format!("The settings could not be read and were moved to {}: {e}", aside.display())))
+            }
+        }
     }
 
     pub fn save(&self, data_dir: &Path) -> std::io::Result<()> {
@@ -49,19 +64,6 @@ impl Settings {
         f.write_all(text.as_bytes())?;
         f.sync_all()?;
         std::fs::rename(tmp, path)
-    }
-
-    pub fn petname(&self, key: &[u8]) -> Option<&str> {
-        self.petnames.get(&hex::encode(key)).map(String::as_str)
-    }
-
-    pub fn set_petname(&mut self, key_hex: &str, name: &str) {
-        let name = crate::text::name(name);
-        if name == "?" {
-            self.petnames.remove(key_hex);
-        } else {
-            self.petnames.insert(key_hex.to_string(), name);
-        }
     }
 }
 
@@ -84,24 +86,45 @@ mod tests {
     #[test]
     fn round_trip() {
         let dir = crate::test_dir();
-        assert_eq!(Settings::load(dir.path()), Settings::default());
-        let mut s = Settings {
+        assert_eq!(Settings::load(dir.path()), (Settings::default(), None));
+        let s = Settings {
             name: "alice".into(),
             daemon: "@katzenpost".into(),
             theme: ThemeChoice::Dark,
             ..Settings::default()
         };
-        s.set_petname("0a0b", "Bob (work)");
         s.save(dir.path()).unwrap();
-        assert_eq!(Settings::load(dir.path()), s);
-        assert_eq!(s.petname(&[0x0a, 0x0b]), Some("Bob (work)"));
-        s.set_petname("0a0b", "");
-        assert_eq!(s.petname(&[0x0a, 0x0b]), None);
+        assert_eq!(Settings::load(dir.path()), (s, None));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(Settings::path(dir.path())).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
+    }
+
+    #[test]
+    fn a_broken_file_is_moved_aside_and_told() {
+        let dir = crate::test_dir();
+        std::fs::write(Settings::path(dir.path()), "name = [").unwrap();
+        let (s, why) = Settings::load(dir.path());
+        assert_eq!(s, Settings::default());
+        assert!(why.unwrap().contains("settings.toml.broken"));
+        assert!(!Settings::path(dir.path()).exists());
+        assert!(dir.path().join("settings.toml.broken").exists());
+    }
+
+    #[test]
+    fn old_petnames_are_still_read() {
+        let dir = crate::test_dir();
+        std::fs::write(Settings::path(dir.path()), "name = \"a\"\n[petnames]\n0a0b = \"Bob\"\n[seen]\ng = 3\n").unwrap();
+        let (s, _) = Settings::load(dir.path());
+        assert_eq!(s.petnames.get("0a0b").map(String::as_str), Some("Bob"));
+        assert_eq!(s.seen.get("g"), Some(&3));
+        // Emptied, they are not written back.
+        let s = Settings { petnames: Default::default(), seen: Default::default(), ..s };
+        s.save(dir.path()).unwrap();
+        let text = std::fs::read_to_string(Settings::path(dir.path())).unwrap();
+        assert!(!text.contains("petnames") && !text.contains("seen"));
     }
 }

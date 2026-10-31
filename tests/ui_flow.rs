@@ -44,10 +44,12 @@ fn make_a_group_and_talk() {
     let _ = std::fs::remove_dir_all(&data);
     let ui = AppWindow::new().unwrap();
     ui.window().set_size(LogicalSize::new(1100.0, 720.0));
+    let files = data.join("files");
     hushphone::bridge::start(
         &ui,
         Setup {
             cache_dir: data.join("cache"),
+            files_dir: files.clone(),
             data_dir: data,
             source: Source::Memory(Default::default()),
             default_daemon: String::new(),
@@ -83,6 +85,17 @@ fn make_a_group_and_talk() {
         })
         .await;
         assert!(st.get_chats().iter().any(|c| c.preview == "you: hello over the mixnet"));
+
+        // A file is sent by putting it in the send directory and picking it there.
+        let send = files.join("send");
+        std::fs::create_dir_all(&send).unwrap();
+        std::fs::write(send.join("notes.txt"), b"the minutes").unwrap();
+        settled(&ui, "Attach a file for friends", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
+        settled(&ui, "Send", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
+        until("the file to be written", || {
+            st.get_lines().iter().any(|l| l.kind == LineKind::File && l.mine && l.file_name == "notes.txt" && l.delivery == Delivery::Written)
+        })
+        .await;
         let _ = slint::quit_event_loop();
     })
     .unwrap();

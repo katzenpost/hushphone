@@ -5,6 +5,7 @@ slint::include_modules!();
 
 pub mod backend;
 pub mod bridge;
+pub mod contacts;
 pub mod effects;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod harden;

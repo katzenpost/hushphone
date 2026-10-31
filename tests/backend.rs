@@ -5,21 +5,23 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use hushphone::backend::{self, Attachments, Cmd, Keys, Params, Source, Update};
+use hushphone::backend::{self, Attachments, Cmd, FileInfo, Keys, Params, Source, Update};
+use hushphone::contacts::Contacts;
 use hushphone::model::{self, Files};
-use hushphone::settings::Settings;
 use hushphone::voice;
 use hushphone::{Delivery, LineKind};
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
 use pigeonhole_protocols::secret::Secret;
 use pigeonhole_protocols::transport::sim::World;
 use tokio::sync::mpsc::UnboundedSender;
+use zeroize::Zeroizing;
 
 struct Peer {
     cmd: UnboundedSender<Cmd>,
     rx: mpsc::Receiver<Update>,
     chats: std::collections::HashMap<String, (ChatView, Vec<LineView>)>,
     paths: std::collections::HashMap<String, PathBuf>,
+    infos: std::collections::HashMap<String, FileInfo>,
     attachments: Option<Attachments>,
     locked: Option<String>,
     made: Option<String>,
@@ -56,6 +58,7 @@ impl Peer {
             rx,
             chats: Default::default(),
             paths: Default::default(),
+            infos: Default::default(),
             attachments: None,
             locked: None,
             made: None,
@@ -65,8 +68,9 @@ impl Peer {
     fn pump(&mut self) {
         while let Ok(u) = self.rx.recv_timeout(Duration::from_millis(20)) {
             match u {
-                Update::Chat { view, from, lines, dropped, paths } => {
+                Update::Chat { view, from, lines, dropped, paths, files } => {
                     self.paths.extend(paths);
+                    self.infos.extend(files);
                     let e = self.chats.entry(view.id.clone()).or_insert_with(|| (view.clone(), Vec::new()));
                     e.0 = view;
                     if from != usize::MAX {
@@ -132,7 +136,7 @@ fn two_members_talk_and_send_voice() {
     // A voice clip goes as a file named by its hash, as frank_chat sends it.
     let clip = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone.opus")).unwrap();
     let name = voice::clip_name(&clip);
-    alice.cmd.send(Cmd::SendFile(g.clone(), name.clone(), clip.clone())).unwrap();
+    alice.cmd.send(Cmd::SendFile(g.clone(), name.clone(), Zeroizing::new(clip.clone()))).unwrap();
     bob.wait("alice's voice clip", |p| {
         p.chat(&bg).1.iter().any(|l| {
             l.line.attachment.as_ref().is_some_and(|a| a.name == name && p.paths.get(&a.file).is_some_and(|f| f.exists()))
@@ -141,13 +145,17 @@ fn two_members_talk_and_send_voice() {
 
     // What bob's UI would show.
     let (view, lines) = bob.chat(&bg).clone();
-    let who = model::names(&view, &Settings::default(), "bob");
+    let who = model::names(&view, &Contacts::default(), "bob");
     let mut files = Files::default();
     for a in lines.iter().filter_map(|l| l.line.attachment.as_ref()) {
         let bytes = bob.attachments.as_ref().unwrap().read(&a.file).unwrap();
         assert_eq!(*bytes, clip, "the clip arrives whole");
         assert_ne!(std::fs::read(&bob.paths[&a.file]).unwrap(), clip, "the clip is kept sealed");
-        files.durations.insert(a.file.clone(), voice::duration(&bytes).unwrap());
+        // The client's thread already read the file and said what it is.
+        let info = bob.infos.get(&a.file).expect("what the file holds");
+        assert_eq!(info.kind, "Ogg audio");
+        assert_eq!(info.duration, voice::duration(&bytes));
+        files.durations.insert(a.file.clone(), info.duration.unwrap());
     }
     let items = model::line_items(&lines, &who, &files, &Default::default(), chrono::Local::now());
     let v = items.iter().find(|i| i.kind == LineKind::Voice).expect("a voice line");
@@ -163,7 +171,7 @@ fn two_members_talk_and_send_voice() {
         p.chat(&g).1.iter().any(|l| l.mine && l.line.attachment.is_some() && l.acked)
     });
     let (view, lines) = alice.chat(&g).clone();
-    let items = model::line_items(&lines, &model::names(&view, &Settings::default(), "alice"), &Files::default(), &Default::default(), chrono::Local::now());
+    let items = model::line_items(&lines, &model::names(&view, &Contacts::default(), "alice"), &Files::default(), &Default::default(), chrono::Local::now());
     assert!(items.iter().any(|i| i.mine && i.delivery == Delivery::Read));
 
     // Bob's state opens only with its key.

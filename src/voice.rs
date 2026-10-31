@@ -34,7 +34,8 @@ pub fn duration(bytes: &[u8]) -> Option<Duration> {
     if granule == u64::MAX {
         return None;
     }
-    Some(Duration::from_micros(granule.saturating_sub(pre_skip) * 1_000_000 / 48_000))
+    let samples = granule.saturating_sub(pre_skip);
+    Some(Duration::from_micros(samples.checked_mul(1_000_000)? / 48_000))
 }
 
 pub fn show_duration(d: Duration) -> String {
@@ -180,6 +181,7 @@ mod tests {
     fn duration_from_granule() {
         assert_eq!(duration(&ogg(312, 312 + 48_000 * 3)), Some(Duration::from_secs(3)));
         assert_eq!(duration(b"not ogg"), None);
+        assert_eq!(duration(&ogg(0, u64::MAX - 1)), None, "a granule that overflows is not a length");
     }
 
     #[test]

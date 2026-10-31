@@ -7,7 +7,7 @@ use chrono::{DateTime, Local, TimeZone};
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
 use pigeonhole_protocols::protocols::katzenqt1::engine::{Notice, NoticeKind, Status, plain};
 
-use crate::settings::Settings;
+use crate::contacts::Contacts;
 use crate::text;
 use crate::voice;
 use crate::{ChatItem, Delivery, LineItem, LineKind, MemberItem};
@@ -41,11 +41,11 @@ pub struct Who {
 }
 
 /// Names for every member of a group, with fingerprints added where two look alike.
-pub fn names(view: &ChatView, settings: &Settings, me_name: &str) -> HashMap<Vec<u8>, Who> {
+pub fn names(view: &ChatView, contacts: &Contacts, me_name: &str) -> HashMap<Vec<u8>, Who> {
     let mut out: HashMap<Vec<u8>, Who> = HashMap::new();
     let mut skeletons: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
     let mut add = |key: &[u8], claimed: &str| {
-        let (shown, unverified) = match settings.petname(key) {
+        let (shown, unverified) = match contacts.petname(key) {
             Some(p) => (p.to_string(), false),
             None => (text::name(claimed), true),
         };
@@ -71,11 +71,13 @@ pub fn names(view: &ChatView, settings: &Settings, me_name: &str) -> HashMap<Vec
     out
 }
 
-/// A notice in the app's words, with any member-supplied names in it cleaned.
+/// A notice in the app's words, with any member-supplied names in it cleaned and clamped as
+/// names are; a failure's own words may be longer.
 pub fn notice_text(n: &Notice) -> String {
+    let max = if n.kind == NoticeKind::ActionFailed { 200 } else { text::NAME_MAX };
     let n = Notice {
         kind: n.kind,
-        args: n.args.iter().map(|a| text::identifier(a, 60)).collect(),
+        args: n.args.iter().map(|a| text::identifier(a, max)).collect(),
     };
     match n.kind {
         NoticeKind::VoucherMinted => "your voucher code is ready: give it to a member of the group".into(),
@@ -282,7 +284,7 @@ mod tests {
 
     #[test]
     fn lookalike_names_get_fingerprints() {
-        let who = names(&view(), &Settings::default(), "me");
+        let who = names(&view(), &Contacts::default(), "me");
         assert!(!who[&vec![1; 32]].fingerprint.is_empty());
         assert!(!who[&vec![2; 32]].fingerprint.is_empty());
         assert!(who[&vec![3; 32]].fingerprint.is_empty());
@@ -293,7 +295,7 @@ mod tests {
 
     #[test]
     fn petnames_win_and_are_verified() {
-        let mut s = Settings::default();
+        let mut s = Contacts::default();
         s.set_petname(&hex::encode([2u8; 32]), "Alice from work");
         let who = names(&view(), &s, "me");
         let w = &who[&vec![2; 32]];
@@ -309,7 +311,7 @@ mod tests {
     #[test]
     fn runs_and_delivery() {
         let v = view();
-        let who = names(&v, &Settings::default(), "me");
+        let who = names(&v, &Contacts::default(), "me");
         let t = now().timestamp_millis();
         let mut mine = line(3, 0, "hi", t + 2000);
         mine.line.status = Status::Pending;

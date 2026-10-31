@@ -3,12 +3,13 @@ use std::path::PathBuf;
 use hushphone::Setup;
 use hushphone::backend::Source;
 
-const USAGE: &str = "usage: hushphone [--daemon ADDRESS] [--sim SOCKET] [--memory] [--data DIR] [--name NAME]
+const USAGE: &str = "usage: hushphone [--daemon ADDRESS] [--sim SOCKET] [--memory] [--data DIR] [--files DIR] [--name NAME]
 
   --daemon ADDRESS  kpclientd's thin client socket: @name, a path, or host:port (default @katzenpost)
   --sim SOCKET      use pigeonhole-sim at SOCKET instead of the mixnet
   --memory          use an in-memory Pigeonhole: nothing leaves this process
   --data DIR        keep state in DIR (default $XDG_DATA_HOME/hushphone)
+  --files DIR       send files from DIR/send and save received ones in DIR/received (default ~/hushphone)
   --name NAME       your name, on the first start";
 
 fn main() {
@@ -17,6 +18,7 @@ fn main() {
     let mut daemon = None;
     let mut source = None;
     let mut data = None;
+    let mut files = None;
     let mut name = None;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -31,6 +33,7 @@ fn main() {
             "--sim" => source = Some(Source::SimSocket(value().into())),
             "--memory" => source = Some(Source::Memory(Default::default())),
             "--data" => data = Some(PathBuf::from(value())),
+            "--files" => files = Some(PathBuf::from(value())),
             "--name" => name = Some(value()),
             "-h" | "--help" => {
                 println!("{USAGE}");
@@ -47,10 +50,12 @@ fn main() {
         Some(d) => d.join("cache"),
         None => dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".")).join("hushphone"),
     };
+    let files_dir = files.unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("hushphone"));
     let default_daemon = "@katzenpost".to_string();
     let setup = Setup {
         data_dir,
         cache_dir,
+        files_dir,
         source: source.unwrap_or_else(|| Source::Daemon(daemon.clone().unwrap_or_default())),
         default_daemon: daemon.unwrap_or(default_daemon),
         name,
