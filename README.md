@@ -145,6 +145,8 @@ whatever other members send is untrusted.
   - **Android.** hushphone gets its connections to kpclientd from kpclientd-android, as unix
     sockets, so the unix-only filter applies there too, on top of Android's own SELinux and
     seccomp sandbox. The app does not even ask for the internet permission.
+- **In memory.** Where the code leaves safe Rust, and how keys, caps and voice clips are kept in
+  guarded memory and wiped, is set out in [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Tests
 
