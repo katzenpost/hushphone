@@ -29,9 +29,9 @@ jobs:
       matrix:
         distro: [debian-13, ubuntu-24.04]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - run: make deb-ci-image DISTRO=${{ matrix.distro }} PODMAN=docker
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: deb-${{ matrix.distro }}
           path: dist/*.deb
@@ -40,8 +40,8 @@ jobs:
     needs: deb
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: deb-ubuntu-24.04
       - run: sudo apt-get update && sudo apt-get install -y xvfb gnome-keyring libsecret-tools ./hushphone_*.deb
