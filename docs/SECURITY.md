@@ -1,8 +1,9 @@
 # Security notes
 
-This document covers two topics:
+This document covers three topics:
 - where hushphone and the libraries it depends on leave safe Rust, and why;
-- how they keep critical data (keys, capabilities, messages, voice clips) from leaking out of memory.
+- how they keep critical data (keys, capabilities, messages, voice clips) from leaking out of memory;
+- how the interface is designed so that what the app does matches what the user meant.
 
 Line numbers are those of the revisions pinned in `Cargo.toml`:
 - pigeonhole_protocols `54df59a`;
@@ -115,3 +116,34 @@ These are the places where critical data can still be left in ordinary memory, u
 - **Heap fallback.** When guarded memory is refused, secrets are still wiped, but can be swapped out or end up in a dump.
 
 Once the process exits, the operating system reclaims its memory, so these gaps matter only for an attacker who can read the memory of a running hushphone. That's what the hardening above is there to prevent.
+
+## Secure interaction design
+
+Memory protection does nothing for a user who is misled into the wrong action. Ka-Ping Yee's chapter [1] asks how a system can protect the interests of its legitimate user, and offers ten guidelines and two strategies for it. Yee's core point is that security comes from what the user initiates, not from warnings the user has to react to. The README's Security section lists what hushphone does, following Paw's GUI security guidelines. This section relates those measures to Yee's terms.
+
+### The two strategies
+
+- **Security by designation.** The act of choosing something also grants the authority to do it, so there's no separate permission step. `UserIntent` (`src/bridge.rs:24`) is this rule in the type system. Only the UI's callbacks can make one, and copying, pasting, picking, saving, opening a file and starting the microphone each require one. Nothing that arrives from the network can trigger them.
+- **User-assigned identifiers.** Names chosen by other parties are a way to attack the user, so the user can assign their own. A member's petname (`src/settings.rs`, `src/model.rs`) is kept locally, shown in bold, and tied to the member's key. A name the member chose for themselves is always marked `~name`, so it can't pass for one of the user's own.
+
+### The guidelines
+
+Each number below is Yee's. Only the guidelines hushphone has a clear answer to are listed.
+
+- **1. Least authority on the easiest path.** The sandbox applies without any setup. On Linux, hushphone gets unix sockets and no IP. On Android, it doesn't ask for the internet permission, and kpclientd-android hands it connected sockets. That is Yee's telephone analogy: the app gets the receiver, not the phone.
+- **2. Authority follows consent.** See `UserIntent` above. Received files are never saved or opened on their own, and joining a group takes a voucher code that the user passes on, and that a member adds by hand.
+- **3. Authority can be taken back.** In kpclientd-android, **Forget** withdraws an app's access and ends its connections at once.
+- **4. Awareness of others' authority.** The recording indicator shows for exactly as long as the microphone is open, and kpclientd-android's **Apps** list shows every app the user has answered about.
+- **6. A protected channel to the agent.** The app's own notices use a frame that no message can draw, and message content is clipped to its bubble.
+- **9. Distinguishable, truthful appearances.** Names lose bidi controls and invisible characters (`src/text.rs`), names that look alike show the start of the member's key, and a file's type is read from its bytes, not its name.
+- **10. Clear consequences.** A dangerous button in a confirmation waits 0.7 s and the safe one has the focus. Every control ignores clicks until it has been still for half a second, so an arriving message can't move a different control under the user's finger.
+
+### Where we still rely on admonition
+
+Yee treats warnings as the fallback for when designation isn't possible, and warns that forced prompts train users to dismiss them. Two remain:
+- **The no-keyring warning.** It's a strip under the group list that doesn't interrupt the user, which is the form Yee recommends.
+- **kpclientd-android's approval question.** This one is a prompt. The daemon can't tell by itself which apps the user trusts, so it has to ask. It's asked once per app and signing key, and **Allow** only takes a tap after a second.
+
+## References
+
+1. Ka-Ping Yee, "Guidelines and Strategies for Secure Interaction Design", chapter 13 of Lorrie Faith Cranor and Simson Garfinkel (eds.), *Security and Usability: Designing Secure Systems That People Can Use*, O'Reilly, 2005, pp. 253–279. <http://sid.toolness.org/ch13yee.pdf>
