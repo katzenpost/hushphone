@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's manifest, linked by scripts/build-apk.sh. No internet permission: hushphone
+     reaches the mixnet only through kpclientd-android's content provider. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="network.katzenpost.hushphone">
+
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36" />
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- kpclientd-android's connect provider, the only way this app reaches the mixnet. -->
+    <queries>
+        <provider
+            android:authorities="org.hoi_polloi.kpdaemon.connect"
+            android:name="org.hoi_polloi.kpdaemon.ConnectProvider" />
+    </queries>
+
+    <application
+        android:label="hushphone"
+        android:hasCode="true">
+
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="hushphone"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
+            android:launchMode="singleTop"
+            android:exported="true">
+            <meta-data android:name="android.app.lib_name" android:value="hushphone" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Opens the system's document picker for the app; see android/FilePicker.java. -->
+        <activity
+            android:name="network.katzenpost.hushphone.FilePicker"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+    </application>
+</manifest>
