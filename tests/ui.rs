@@ -155,3 +155,86 @@ fn releasing_the_talk_button_sends_after_the_composer_changes() {
     ui.window().dispatch_event(WindowEvent::PointerReleased { position: at, button: PointerEventButton::Left });
     assert_eq!(stopped.get(), 1, "the release reaches the button that saw the press");
 }
+
+/// Rows are updated in place, so a button can come to stand for another message without
+/// moving: it must settle again before it acts on the new one.
+#[test]
+fn a_button_that_comes_to_stand_for_another_message_settles_again() {
+    use hushphone::LineItem;
+    use slint::{Model, ModelRc, VecModel};
+    let ui = window();
+    let saved = Rc::new(Cell::new(-1));
+    let s = saved.clone();
+    ui.global::<Actions>().on_save_file(move |id| s.set(id));
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    ui.set_show_conversation(true);
+    let file = |id: i32, name: &str| LineItem {
+        id,
+        kind: hushphone::LineKind::File,
+        file_name: name.into(),
+        file_size: "1 KB".into(),
+        file_type: "PDF document".into(),
+        from: "~bob".into(),
+        first: true,
+        ..Default::default()
+    };
+    let lines = Rc::new(VecModel::from(vec![file(1, "a.pdf")]));
+    st.set_lines(ModelRc::from(lines.clone()));
+    mock_elapsed_time(Duration::from_millis(100));
+    let save = button(&ui, "Save a.pdf");
+    mock_elapsed_time(Duration::from_millis(600));
+    // The row now shows another message, at the same place.
+    lines.set_row_data(0, file(2, "b.pdf"));
+    let save_b = button(&ui, "Save b.pdf");
+    assert_eq!(save.absolute_position(), save_b.absolute_position(), "the button did not move");
+    save_b.mock_single_click(PointerEventButton::Left);
+    assert_eq!(saved.get(), -1, "a click right after the change goes nowhere");
+    mock_elapsed_time(Duration::from_millis(600));
+    save_b.mock_single_click(PointerEventButton::Left);
+    assert_eq!(saved.get(), 2);
+}
+
+/// The attach dialog lists what the host found in the send directory, and sends the one picked.
+#[test]
+fn attaching_picks_from_the_send_directory() {
+    use hushphone::AttachItem;
+    use slint::{ModelRc, VecModel};
+    let ui = window();
+    let listed = Rc::new(Cell::new(0));
+    let sent = Rc::new(std::cell::RefCell::new(String::new()));
+    let (l, s) = (listed.clone(), sent.clone());
+    ui.global::<Actions>().on_open_attach(move || l.set(l.get() + 1));
+    ui.global::<Actions>().on_attach_file(move |name| *s.borrow_mut() = name.to_string());
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    st.set_files_dir("/home/me/hushphone".into());
+    ui.set_show_conversation(true);
+    mock_elapsed_time(Duration::from_millis(100));
+    let attach = button(&ui, "Attach a file for friends");
+    mock_elapsed_time(Duration::from_millis(600));
+    attach.mock_single_click(PointerEventButton::Left);
+    assert_eq!(listed.get(), 1, "the host is asked to list the directory");
+    // As the host does once it has read the directory.
+    st.set_attachable(ModelRc::from(Rc::new(VecModel::from(vec![
+        AttachItem { name: "report.pdf".into(), size: "12 KB".into(), too_large: false },
+        AttachItem { name: "huge.iso".into(), size: "700.0 MB".into(), too_large: true },
+    ]))));
+    ui.set_overlay(Overlay::Attach);
+    let sends: Vec<_> = ElementHandle::find_by_accessible_label(&ui, "Send")
+        .filter(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Button))
+        .collect();
+    assert_eq!(sends.len(), 2);
+    for s in &sends {
+        let _ = s.absolute_position();
+    }
+    assert_eq!(sends[1].accessible_enabled(), Some(false), "a file too large cannot be sent");
+    mock_elapsed_time(Duration::from_millis(600));
+    sends[0].mock_single_click(PointerEventButton::Left);
+    assert_eq!(*sent.borrow(), "report.pdf");
+    assert_eq!(ui.get_overlay(), Overlay::None);
+}

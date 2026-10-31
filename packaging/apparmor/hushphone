@@ -1,10 +1,15 @@
 # AppArmor profile for hushphone. kpclientd does all the networking, so hushphone may use unix
-# sockets only: no IP at all. It reads and writes its own data, reads the files a user attaches,
-# saves into Downloads or through the desktop's file chooser, and starts no program.
+# sockets only: no IP at all. It reads and writes its own data, reads the files the user puts in
+# ~/hushphone/send to send them, writes received files the user saves into ~/hushphone/received,
+# and starts no program. On the session bus it may speak only to the bus itself and to the
+# keyring (the Secret Service): not to the user's systemd, which would start programs for it,
+# nor to the portals.
 #
 # A kpclientd reached at host:port needs TCP; allow it in /etc/apparmor.d/local/hushphone with
 #   network inet stream,
 #   network inet6 stream,
+# A kpclientd at another abstract socket than @katzenpost needs
+#   unix (connect, send, receive) type=stream peer=(addr="@name"),
 
 abi <abi/4.0>,
 
@@ -18,16 +23,19 @@ profile hushphone /usr/bin/hushphone {
   include if exists <abstractions/freedesktop.org>
   include if exists <abstractions/mesa>
   include if exists <abstractions/nameservice-strict>
-  include if exists <abstractions/user-download>
   include if exists <abstractions/wayland>
   include if exists <abstractions/X>
+  # The session bus itself, over its socket in /run/user or dbus-launch's abstract one.
+  include <abstractions/dbus-session-strict>
 
-  # kpclientd's socket, the display, the session bus and the sound server.
-  unix,
-  dbus bus=session,
-  owner /run/user/[0-9]*/bus rw,
-  # The session bus of dbus-run-session and dbus-launch, where the keyring is found.
-  owner /tmp/dbus-* rw,
+  # kpclientd's abstract socket.
+  unix (connect, send, receive) type=stream peer=(addr="@katzenpost"),
+  # Socket pairs of the app's own, as the toolkit makes to wake its threads.
+  unix (create, getattr, getopt, setopt, shutdown, send, receive) addr=none,
+  # The keyring that holds the state's key. Everything else on the bus is refused: the
+  # user's systemd would start programs for it, the portals would open files and URLs.
+  dbus (send, receive) bus=session peer=(name=org.freedesktop.secrets),
+  dbus receive bus=session,
   # Refused and logged: nothing in hushphone should ever try.
   audit deny network inet,
   audit deny network inet6,
@@ -53,9 +61,12 @@ profile hushphone /usr/bin/hushphone {
   owner @{HOME}/.cache/mesa_shader_cache/ rw,
   owner @{HOME}/.cache/mesa_shader_cache/** rwk,
 
-  # Files the user attaches, and the documents the file chooser hands over.
-  owner @{HOME}/** r,
-  owner /run/user/[0-9]*/doc/** rw,
+  # The user's files directory: read what is put in send/, write what is saved to received/.
+  owner @{HOME}/hushphone/ rw,
+  owner @{HOME}/hushphone/send/ rw,
+  owner @{HOME}/hushphone/send/* r,
+  owner @{HOME}/hushphone/received/ rw,
+  owner @{HOME}/hushphone/received/* w,
 
   include if exists <local/hushphone>
 }

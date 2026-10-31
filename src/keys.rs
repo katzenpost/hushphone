@@ -58,36 +58,6 @@ pub fn seal_existing(dir: &Path, key: &Secret) -> Result<(), String> {
     }
 }
 
-/// Write over every file under `dir` and remove it. Flash storage may keep the old blocks
-/// anyway; this is the most an app can do.
-pub fn wipe(dir: &Path) {
-    fn over(p: &Path) {
-        let Ok(rd) = std::fs::read_dir(p) else { return };
-        for e in rd.flatten() {
-            let p = e.path();
-            if e.file_type().is_ok_and(|t| t.is_dir()) {
-                over(&p);
-            } else if let Ok(len) = e.metadata().map(|m| m.len()) {
-                use std::io::Write;
-                if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(&p) {
-                    let zeros = vec![0u8; 64 * 1024];
-                    let mut left = len;
-                    while left > 0 {
-                        let n = left.min(zeros.len() as u64) as usize;
-                        if f.write_all(&zeros[..n]).is_err() {
-                            break;
-                        }
-                        left -= n as u64;
-                    }
-                    let _ = f.sync_all();
-                }
-            }
-        }
-    }
-    over(dir);
-    let _ = std::fs::remove_dir_all(dir);
-}
-
 /// The Secret Service keyring of the session.
 #[cfg(not(target_os = "android"))]
 pub struct System;

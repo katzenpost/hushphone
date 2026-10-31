@@ -1,31 +1,37 @@
 import { Theme } from "../theme.slint";
 import { Clock } from "../globals.slint";
 
-// Accepts activation only once its control has been visible, enabled and unmoved for `settle`,
-// so content arriving and shifting the layout cannot steer a click onto it. It reads the host's
-// clock when asked, so the answer never depends on when a timer fires or a frame is drawn.
+// Accepts activation only once its control has been visible, enabled, unmoved and about the
+// same thing for `settle`, so content arriving and shifting the layout, or a row that comes to
+// stand for another message, cannot steer a click onto it. It reads the host's clock when asked,
+// so the answer never depends on when a timer fires or a frame is drawn.
 export component Stable {
     in property <bool> enabled: true;
     in property <duration> settle: 500ms;
     in property <Point> at;
+    // What the control acts on, such as a message's id: a change is as good as a move.
+    in property <string> key;
     private property <duration> since;
     private property <Point> seen;
     private property <bool> was-enabled;
+    private property <string> was-key;
 
     init => { root.restart(); }
     changed at => { root.restart(); }
     changed enabled => { root.restart(); }
+    changed key => { root.restart(); }
 
     function restart() {
         root.since = Clock.now();
         root.seen = root.at;
         root.was-enabled = root.enabled;
+        root.was-key = root.key;
     }
 
-    // Also checks the position itself, so a move not yet reported by the handlers above still
-    // counts as a move.
+    // Also checks the position and key themselves, so a change not yet reported by the handlers
+    // above still counts.
     public function ready() -> bool {
-        if (root.at != root.seen || root.enabled != root.was-enabled) {
+        if (root.at != root.seen || root.enabled != root.was-enabled || root.key != root.was-key) {
             root.restart();
             return false;
         }
@@ -61,6 +67,8 @@ export component IconButton {
     in property <color> tint-active: Theme.text;
     in property <length> size: Theme.control;
     in property <bool> round: true;
+    // What the button acts on; see Stable.
+    in property <string> key;
     callback activated();
     private property <bool> keyboard-focus;
 
@@ -75,6 +83,7 @@ export component IconButton {
     stable := Stable {
         enabled: root.enabled;
         at: root.absolute-position;
+        key: root.key;
     }
 
     bg := Rectangle {
@@ -132,6 +141,8 @@ export component Button {
     in property <bool> danger: false;
     in property <bool> enabled: true;
     in property <duration> settle: 500ms;
+    // What the button acts on; see Stable.
+    in property <string> key;
     callback activated();
     private property <bool> keyboard-focus;
 
@@ -147,6 +158,7 @@ export component Button {
         enabled: root.enabled;
         at: root.absolute-position;
         settle: root.settle;
+        key: root.key;
     }
 
     private property <color> fill: root.danger ? Theme.danger : root.primary ? Theme.accent : Theme.raised;

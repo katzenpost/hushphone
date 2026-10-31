@@ -33,6 +33,7 @@ component VoicePill {
             size: 36px;
             icon: root.line.playing ? @image-url("../icons/stop.svg") : @image-url("../icons/play.svg");
             label: root.line.playing ? "Stop voice message" : "Play voice message";
+            key: "" + root.line.id;
             tint: root.ink;
             tint-active: root.ink;
             activated => { Actions.toggle-voice(root.line.id); }
@@ -110,17 +111,10 @@ component FileCard {
                 size: 32px;
                 icon: @image-url("../icons/download.svg");
                 label: "Save " + root.line.file-name;
+                key: "" + root.line.id;
                 tint: root.ink;
                 tint-active: root.ink;
                 activated => { Actions.save-file(root.line.id); }
-            }
-            IconButton {
-                size: 32px;
-                icon: @image-url("../icons/external.svg");
-                label: "Open " + root.line.file-name + " with another app";
-                tint: root.ink;
-                tint-active: root.ink;
-                activated => { Actions.open-file(root.line.id); }
             }
         }
     }

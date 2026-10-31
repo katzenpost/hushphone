@@ -419,7 +419,7 @@ component Composer inherits Rectangle {
                     icon: @image-url("icons/paperclip.svg");
                     label: "Attach a file for " + AppState.current-name;
                     enabled: AppState.current-joined;
-                    activated => { Actions.attach-file(); }
+                    activated => { Actions.open-attach(); }
                 }
             }
             if !AppState.recording: VerticalLayout {
@@ -887,6 +887,54 @@ component MembersDialog inherits Dialog {
     }
 }
 
+// The files in the send directory, for the user to pick one to send. The list is what the host
+// read when the dialog opened; Refresh reads it again.
+component AttachDialog inherits Dialog {
+    callback send-file(string);
+    panel-width: 480px;
+    Hint { text: "Put the file in " + AppState.files-dir + "/send first, then pick it here. Every member of the group gets it."; }
+    if AppState.attachable.length == 0: Hint { text: "Nothing there yet."; }
+    ListView {
+        min-height: min(360px, AppState.attachable.length * 56px + 8px);
+        for f in AppState.attachable: HorizontalLayout {
+            height: 56px;
+            spacing: Theme.s3;
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                Text {
+                    text: f.name;
+                    color: Theme.text;
+                    font-size: Theme.fs-body;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+                Text {
+                    text: f.too-large ? f.size + " · too large to send: 16 MiB at most" : f.size;
+                    color: Theme.text-faint;
+                    font-size: Theme.fs-small;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+            }
+            Button {
+                y: (parent.height - self.height) / 2;
+                text: "Send";
+                primary: true;
+                enabled: !f.too-large;
+                key: f.name;
+                activated => { root.send-file(f.name); }
+            }
+        }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.s2;
+        Button { text: "Refresh"; activated => { Actions.open-attach(); } }
+        Button { text: "Cancel"; activated => { root.dismissed(); } }
+    }
+}
+
 component SettingsDialog inherits Dialog {
     in-out property <string> daemon: AppState.daemon;
     panel-width: 460px;
@@ -917,7 +965,8 @@ component SettingsDialog inherits Dialog {
             }
         }
     }
-    Hint { text: "Members see the name you chose when hushphone first started. A new daemon address is used the next time hushphone starts. Press F10 to hide the window's contents at once."; }
+    Hint { text: "Members see the name you chose when hushphone first started. A new daemon address is used the next time hushphone starts; a host:port address carries every key and message to that host unprotected, so use one only on this machine. Press F10 to hide the window's contents at once."; }
+    if AppState.files-dir != "": Hint { text: "Files to send go in " + AppState.files-dir + "/send; files you save land in " + AppState.files-dir + "/received. hushphone reads and writes no other files of yours."; }
     HorizontalLayout {
         alignment: end;
         spacing: Theme.s2;
@@ -933,7 +982,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, settings, rename, petname, confirm-leave, confirm-clear, confirm-remove }
+export enum Overlay { none, first-run, new-group, join, invite, members, settings, rename, petname, attach, confirm-leave, confirm-clear, confirm-remove }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1130,6 +1179,14 @@ export component AppWindow inherits Window {
                 submitted(v) => {
                     Actions.set-petname(root.target.key, v);
                     root.overlay = Overlay.members;
+                }
+            }
+            if root.overlay == Overlay.attach: AttachDialog {
+                title: "Send a file to " + AppState.current-name;
+                dismissed => { root.overlay = Overlay.none; }
+                send-file(name) => {
+                    Actions.attach-file(name);
+                    root.overlay = Overlay.none;
                 }
             }
             if root.overlay == Overlay.members: MembersDialog {

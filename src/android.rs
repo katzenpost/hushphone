@@ -7,11 +7,12 @@ use slint::android::android_activity::WindowManagerFlags;
 
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
 use crate::backend::Source;
 use crate::bridge::UserIntent;
+use crate::effects::{FILE_MAX, Picked};
 
 /// Where kpclientd-android hands out connections to the daemon, to the apps the user allows.
 const CONNECT: &str = "content://org.hoi_polloi.kpdaemon.connect";
@@ -40,6 +41,8 @@ fn android_main(app: AndroidApp) {
     start_relay(relay.clone());
     let setup = crate::Setup {
         cache_dir: data.join("cache"),
+        // Unused here: the system's document picker stands in for the files directory.
+        files_dir: data.join("files"),
         data_dir: data,
         // Always the relay: it is part of the app, not a setting, and its place has moved before.
         source: Source::Daemon(relay.to_string_lossy().into_owned()),
@@ -131,6 +134,156 @@ pub fn paste_text() -> Result<String, String> {
         let s = env.call_method(&cs, "toString", "()Ljava/lang/String;", &[])?.l()?;
         Ok(env.get_string(&s.into())?.into())
     })
+}
+
+/// The picker's answer, for the thread that opened it; see android/FilePicker.java.
+static PICK: Mutex<Option<mpsc::Sender<Option<String>>>> = Mutex::new(None);
+
+/// Called by FilePicker with the document's URI, or null if the user went back.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_network_katzenpost_hushphone_FilePicker_nativeOnResult(
+    mut env: jni::JNIEnv<'_>,
+    _this: JObject<'_>,
+    uri: jni::objects::JString<'_>,
+) {
+    let uri = if uri.is_null() { None } else { env.get_string(&uri).ok().map(String::from) };
+    if let Some(tx) = PICK.lock().unwrap().take() {
+        let _ = tx.send(uri);
+    }
+}
+
+/// Open the system's document picker through FilePicker, and wait for its answer: the
+/// document's URI, or none if the user went back. `mode` is "open" or "create", `name` the name
+/// to suggest.
+fn pick(mode: &str, name: &str) -> Result<Option<String>, String> {
+    let (tx, rx) = mpsc::channel();
+    {
+        let mut p = PICK.lock().unwrap();
+        if p.is_some() {
+            return Err("a picker is already open".into());
+        }
+        *p = Some(tx);
+    }
+    let started = with_activity(|env, activity| {
+        let intent = env.new_object("android/content/Intent", "()V", &[])?;
+        // By name, rather than through FindClass, which cannot see the app's classes from a
+        // native thread.
+        let class = env.new_string("network.katzenpost.hushphone.FilePicker")?;
+        env.call_method(
+            &intent,
+            "setClassName",
+            "(Landroid/content/Context;Ljava/lang/String;)Landroid/content/Intent;",
+            &[JValue::Object(activity), JValue::Object(&class)],
+        )?;
+        for (k, v) in [("mode", mode), ("name", name)] {
+            let (k, v) = (env.new_string(k)?, env.new_string(v)?);
+            env.call_method(
+                &intent,
+                "putExtra",
+                "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;",
+                &[JValue::Object(&k), JValue::Object(&v)],
+            )?;
+        }
+        env.call_method(activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::Object(&intent)])?;
+        Ok(())
+    });
+    if let Err(e) = started {
+        PICK.lock().unwrap().take();
+        return Err(format!("couldn't open the picker: {e}"));
+    }
+    rx.recv().map_err(|_| "the picker gave no answer".to_string())
+}
+
+/// The document at `uri`, opened through the content resolver in `mode` ("r" or "wt"), as a
+/// descriptor of ours.
+fn open_document<'a>(env: &mut jni::JNIEnv<'a>, activity: &JObject, uri: &JObject, mode: &str) -> jni::errors::Result<OwnedFd> {
+    let resolver = env
+        .call_method(activity, "getContentResolver", "()Landroid/content/ContentResolver;", &[])?
+        .l()?;
+    let mode = env.new_string(mode)?;
+    let pfd = env
+        .call_method(
+            &resolver,
+            "openFileDescriptor",
+            "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;",
+            &[JValue::Object(uri), JValue::Object(&mode)],
+        )?
+        .l()?;
+    if pfd.is_null() {
+        return Err(jni::errors::Error::NullPtr("no descriptor for the document"));
+    }
+    let fd = env.call_method(&pfd, "detachFd", "()I", &[])?.i()?;
+    // SAFETY: detachFd hands over the descriptor; nothing else owns it now.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+}
+
+fn parse_uri<'a>(env: &mut jni::JNIEnv<'a>, uri: &str) -> jni::errors::Result<JObject<'a>> {
+    let text = env.new_string(uri)?;
+    env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&text)])?
+        .l()
+}
+
+/// The name the document's provider gives it, or an empty string.
+fn display_name(env: &mut jni::JNIEnv, activity: &JObject, uri: &JObject) -> jni::errors::Result<String> {
+    let resolver = env
+        .call_method(activity, "getContentResolver", "()Landroid/content/ContentResolver;", &[])?
+        .l()?;
+    let column = env.new_string("_display_name")?;
+    let columns = env.new_object_array(1, "java/lang/String", &column)?;
+    let null = JObject::null();
+    let cursor = env
+        .call_method(
+            &resolver,
+            "query",
+            "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;",
+            &[JValue::Object(uri), JValue::Object(&columns), JValue::Object(&null), JValue::Object(&null), JValue::Object(&null)],
+        )?
+        .l()?;
+    if cursor.is_null() {
+        return Ok(String::new());
+    }
+    let mut name = String::new();
+    if env.call_method(&cursor, "moveToFirst", "()Z", &[])?.z()? {
+        let s = env.call_method(&cursor, "getString", "(I)Ljava/lang/String;", &[JValue::Int(0)])?.l()?;
+        if !s.is_null() {
+            name = env.get_string(&s.into())?.into();
+        }
+    }
+    env.call_method(&cursor, "close", "()V", &[])?;
+    Ok(name)
+}
+
+/// Let the user pick a document to send: its name and bytes, or none if they went back. Only
+/// ever called for the user pressing Attach.
+pub fn pick_document(_: &UserIntent) -> Result<Option<Picked>, String> {
+    use std::io::Read;
+    let Some(uri) = pick("open", "")? else { return Ok(None) };
+    let (name, fd) = with_activity(|env, activity| {
+        let u = parse_uri(env, &uri)?;
+        let name = display_name(env, activity, &u)?;
+        Ok((name, open_document(env, activity, &u, "r")?))
+    })?;
+    let name = crate::text::identifier(if name.is_empty() { "file" } else { &name }, 200);
+    let mut bytes = zeroize::Zeroizing::new(Vec::new());
+    std::fs::File::from(fd).take(FILE_MAX + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > FILE_MAX {
+        return Err(format!("{name} is too large to send: 16 MiB at most."));
+    }
+    Ok(Some(Picked { name, bytes }))
+}
+
+/// Let the user pick where to save a received file, and write it there; false if they went
+/// back. Only ever called for the user pressing Save.
+pub fn create_document(_: &UserIntent, name: &str, bytes: &[u8]) -> Result<bool, String> {
+    use std::io::Write;
+    let Some(uri) = pick("create", &crate::effects::file_name(name))? else { return Ok(false) };
+    let fd = with_activity(|env, activity| {
+        let u = parse_uri(env, &uri)?;
+        open_document(env, activity, &u, "wt")
+    })?;
+    let mut f = std::fs::File::from(fd);
+    f.write_all(bytes).and_then(|()| f.sync_all()).map_err(|e| e.to_string())?;
+    Ok(true)
 }
 
 /// Why kpclientd-android gave no connection.
