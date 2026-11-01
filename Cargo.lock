@@ -964,6 +964,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half 2.7.1",
+]
+
+[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -984,6 +1011,46 @@ dependencies = [
  "libc",
  "libloading",
 ]
+
+[[package]]
+name = "clap"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa8876b300ab35ba921adea3dfd70157a46249b33f95c9084ae5709785478946"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap_lex",
+ "strsim",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9c751b79415d4e559e3d1fcf128e09e720eb673a06d26cf6f392d37d75b66e0"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+]
+
+[[package]]
+name = "clap_lex"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
 name = "clipboard-win"
@@ -3123,8 +3190,7 @@ dependencies = [
 [[package]]
 name = "katzenpost_thin_client"
 version = "0.0.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fdfcaf04d0c358132c28dcf41bc979f90a8e4ecd3548d4f1c5ef8208232b4db"
+source = "git+https://github.com/katzenpost/thin_client?rev=2aff9881b07cd4604f957df619fa8dcbee5dded3#2aff9881b07cd4604f957df619fa8dcbee5dded3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4392,15 +4458,20 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=54df59a5553e4b527da13338f2150eebf06cfce5#54df59a5553e4b527da13338f2150eebf06cfce5"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=ad9d3e270f4e01739b40b75a410e062d66b8c2f7#ad9d3e270f4e01739b40b75a410e062d66b8c2f7"
 dependencies = [
  "base64 0.22.1",
  "blake2",
  "chacha20poly1305",
+ "ciborium",
+ "clap",
  "ed25519-dalek",
+ "env_logger",
  "hex",
+ "hkdf",
  "indexmap",
  "katzenpost_thin_client",
+ "log",
  "memsec",
  "rand 0.8.8",
  "redb",
@@ -4408,7 +4479,10 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha3",
+ "subtle",
+ "thiserror 2.0.21",
  "tokio",
+ "tokio-util",
  "zeroize",
 ]
 
@@ -5624,6 +5698,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
+
+[[package]]
 name = "strum"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5929,6 +6009,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.7.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e464cf451ba96ebfc6f9b6542f17ee8b8956e33f1e40d9690624e59d7a7f8a4b"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
