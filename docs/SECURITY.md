@@ -6,7 +6,7 @@ This document covers three topics:
 - how the interface is designed so that what the app does matches what the user meant.
 
 Line numbers are those of the revisions pinned in `Cargo.toml`:
-- pigeonhole_protocols `54df59a`;
+- pigeonhole_protocols `ad9d3e2`;
 - rustic_audio `0be6248`.
 
 ## Unsafe code
@@ -28,7 +28,7 @@ Safe Rust can't make system calls, cross the Java boundary, or manage memory pag
 6. **`src/android.rs:215` and `:368`.** `OwnedFd::from_raw_fd` takes over a descriptor from Java: the document the user picked, opened by the content resolver, and the socket kpclientd-android hands back. `ParcelFileDescriptor.detachFd` gives up ownership on the Java side first, so each descriptor has exactly one owner, which closes it on drop.
 7. **`tests/sandbox.rs:70`** (test only). `prctl(PR_GET_DUMPABLE)` and `getrlimit(RLIMIT_CORE)` check that item 1 took effect.
 
-### pigeonhole_protocols: `Secret` (`src/secret/mod.rs`)
+### pigeonhole_protocols: `Secret` (`rust/src/secret/mod.rs`)
 
 All of these are inside `Secret`, the type that holds every key and capability (see below).
 
