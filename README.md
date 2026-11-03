@@ -84,7 +84,8 @@ ship one.
 - **Start a group** with New group. Only you see the name you give it.
 - **Join someone's group** with Join a group. hushphone mints a voucher over the mixnet and shows
   its code. Give the code to a member of the group over a channel you trust; when they add it with
-  Add a member, you join.
+  Add a member, you join. [docs/vouchers.md](docs/vouchers.md) walks through both sides with
+  screenshots.
 - **Talk** by holding the microphone button, or Space while it has focus; let go to send. Escape,
   or dragging away, cancels.
 - **Files.** On Linux, hushphone touches one directory of yours, `~/hushphone`. To send a file,
