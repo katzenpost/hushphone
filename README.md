@@ -38,6 +38,14 @@ cargo run --release -- --daemon @katzenpost
 | `--wire-version 3\|4` | the katzenqt1 wire version written and minted: 3 (map form, long vouchers) or 4 (compact; default); saved for later starts; both are read |
 | `--sim SOCKET` | use `pigeonhole-sim` instead of the mixnet |
 | `--memory` | an in-memory Pigeonhole: nothing leaves the process |
+| `--replica HOST:PORT` | a Pigeonhole replica on a Reticulum mesh, over one TCP link from a Reticulum instance of hushphone's own; namenlos's bridge replica is `162.220.11.225:4242` |
+| `--rns-config DIR` | the Reticulum instance `DIR` describes, instead of `--replica` |
+| `--box-size N` | the mesh's box plaintext size (default namenlos's, 1549) |
+
+The mesh flags need `cargo build --features mesh`, which embeds Python through PyO3. The Python
+packages `rns`, `pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` must be installed, in the
+virtual environment `VIRTUAL_ENV` names or system-wide. Members on the mesh and on the mixnet share
+groups through a bridge replica.
 
 ### Debian package
 

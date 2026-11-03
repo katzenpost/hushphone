@@ -32,6 +32,9 @@ pub enum Source {
     SimSocket(PathBuf),
     /// An in-memory Pigeonhole shared by the clients of this process.
     Memory(World),
+    /// A Reticulum mesh: the Reticulum config directory (`None`, `~/.reticulum`) and the box size.
+    #[cfg(feature = "mesh")]
+    Mesh(Option<PathBuf>, usize),
 }
 
 /// How the state is kept at rest.
@@ -246,6 +249,22 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
         Source::SimSocket(s) => {
             tell(Update::Link(Link::Online));
             serve(cfg(), Remote { socket: s.clone() }, None, &att, &mut rx, &tell).await;
+        }
+        #[cfg(feature = "mesh")]
+        Source::Mesh(dir, box_size) => {
+            use pigeonhole_protocols::transport::reticulum_py::ReticulumPyBackend;
+            tell(Update::Link(Link::Connecting));
+            match ReticulumPyBackend::connect(dir.as_deref(), *box_size, Duration::from_secs(90)).await {
+                Ok(b) => {
+                    tell(Update::Link(Link::Online));
+                    serve(cfg(), b, None, &att, &mut rx, &tell).await;
+                }
+                // Reticulum starts once per process, so this is not retried here.
+                Err(e) => {
+                    tell(Update::Link(Link::Unreachable));
+                    tell(Update::Failed(format!("Can't reach a replica on the mesh: {e}")));
+                }
+            }
         }
         Source::Daemon(addr) => {
             let mut wait = Duration::from_secs(1);

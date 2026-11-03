@@ -389,6 +389,8 @@ impl App {
             use crate::sandbox::{self, Net};
             let net = match &source {
                 Source::Daemon(a) => Net::for_daemon(a),
+                #[cfg(feature = "mesh")]
+                Source::Mesh(..) => Net::Tcp,
                 _ => Net::Unix,
             };
             // Without the filter the app does not go on: HUSHPHONE_SANDBOX=off is the way
