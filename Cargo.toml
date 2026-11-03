@@ -19,10 +19,10 @@ path = "src/main.rs"
 
 [dependencies]
 slint = "=1.18.1"
-pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "a0048e9560d75a54c8ccfc32eb052018887b3808" }
+pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "aa37ab55ef788ea368d67de2ab80d196f60b16e3" }
 # The same revision pigeonhole_protocols builds on (katzenpost/thin_client#100), so that there is
 # one ThinClient type; back to crates.io once it is released.
-katzenpost_thin_client = { git = "https://github.com/katzenpost/thin_client", rev = "2aff9881b07cd4604f957df619fa8dcbee5dded3" }
+katzenpost_thin_client = { git = "https://github.com/katzenpost/thin_client", rev = "98ff985ad348156eccbe7d3f4c4849a47041f2d3" }
 rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "0be624803b12fd2d00d6804ff692f468aaa5c10d" }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 futures-util = "0.3"

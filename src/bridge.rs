@@ -56,6 +56,8 @@ pub struct Setup {
     pub default_daemon: String,
     /// A name given on the command line, for a first start without asking.
     pub name: Option<String>,
+    /// A katzenqt1 wire version given on the command line, saved over the saved one.
+    pub wire_version: Option<u64>,
     /// Daemon addresses an older version saved as its default, to move to `default_daemon`.
     pub old_defaults: Vec<String>,
     /// How the state is kept at rest.
@@ -118,6 +120,10 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         && let Some(n) = &setup.name
     {
         settings.name = text::name(n);
+        let _ = settings.save(&setup.data_dir);
+    }
+    if setup.wire_version.is_some() && setup.wire_version != settings.wire_version {
+        settings.wire_version = setup.wire_version;
         let _ = settings.save(&setup.data_dir);
     }
     if settings.daemon.is_empty() || setup.old_defaults.contains(&settings.daemon) {
@@ -398,6 +404,7 @@ impl App {
             state_dir: self.setup.data_dir.join("state"),
             name: self.settings.name.clone(),
             keys: self.setup.keys.clone(),
+            wire_version: self.settings.wire_version.filter(|v| matches!(v, 3 | 4)).unwrap_or(4),
         };
         self.cmd = Some(backend::spawn(params, |u| later(move |app| app.apply(u))));
     }

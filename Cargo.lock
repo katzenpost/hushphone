@@ -345,7 +345,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1681,7 +1681,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3190,7 +3190,7 @@ dependencies = [
 [[package]]
 name = "katzenpost_thin_client"
 version = "0.0.25"
-source = "git+https://github.com/katzenpost/thin_client?rev=2aff9881b07cd4604f957df619fa8dcbee5dded3#2aff9881b07cd4604f957df619fa8dcbee5dded3"
+source = "git+https://github.com/katzenpost/thin_client?rev=98ff985ad348156eccbe7d3f4c4849a47041f2d3#98ff985ad348156eccbe7d3f4c4849a47041f2d3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4458,7 +4458,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=a0048e9560d75a54c8ccfc32eb052018887b3808#a0048e9560d75a54c8ccfc32eb052018887b3808"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=aa37ab55ef788ea368d67de2ab80d196f60b16e3#aa37ab55ef788ea368d67de2ab80d196f60b16e3"
 dependencies = [
  "base64 0.22.1",
  "blake2",
@@ -5160,7 +5160,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5838,7 +5838,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

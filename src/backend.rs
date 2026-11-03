@@ -167,6 +167,8 @@ pub struct Params {
     pub state_dir: PathBuf,
     pub name: String,
     pub keys: Keys,
+    /// The katzenqt1 wire version written and minted: 3 or 4.
+    pub wire_version: u64,
 }
 
 /// Start the client's thread; `tell` is called on that thread for every update.
@@ -234,6 +236,7 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
         epoch_poll: Duration::from_secs(60),
         no_sync: false,
         key: key.clone(),
+        wire_version: p.wire_version,
     };
     match &p.source {
         Source::Memory(w) => {

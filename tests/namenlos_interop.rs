@@ -106,6 +106,7 @@ fn namenlos_interop() {
             source: Source::Daemon(daemon),
             default_daemon: String::new(),
             name: Some("hush".into()),
+            wire_version: None,
             old_defaults: Vec::new(),
             keys: hushphone::backend::Keys::None,
         },

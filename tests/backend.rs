@@ -49,8 +49,13 @@ impl Peer {
     }
 
     fn open(w: &World, name: &str, state_dir: PathBuf, keys: Keys) -> Peer {
+        Peer::open_at(w, name, state_dir, keys, 4)
+    }
+
+    fn open_at(w: &World, name: &str, state_dir: PathBuf, keys: Keys, wire_version: u64) -> Peer {
         let (tx, rx) = mpsc::channel();
-        let cmd = backend::spawn(Params { source: Source::Memory(w.clone()), state_dir, name: name.into(), keys }, move |u| {
+        let params = Params { source: Source::Memory(w.clone()), state_dir, name: name.into(), keys, wire_version };
+        let cmd = backend::spawn(params, move |u| {
             let _ = tx.send(u);
         });
         Peer {
@@ -196,4 +201,22 @@ fn cancel_joining() {
     let id = dana.made.clone().unwrap();
     dana.cmd.send(Cmd::Leave(id.clone())).unwrap();
     dana.wait("the group to go", |p| !p.chats.contains_key(&id));
+}
+
+/// The wire version in the params reaches the client: version 3 mints the map form voucher
+/// payload, which begins with the map byte, and version 4 the compact one.
+#[test]
+fn wire_version_sets_the_voucher_form() {
+    for v in [3, 4] {
+        let w = World::default();
+        let name = format!("erin{v}");
+        let mut p = Peer::open_at(&w, &name, dir(&name), Keys::None, v);
+        p.cmd.send(Cmd::Join("friends".into(), 1)).unwrap();
+        p.wait("a voucher code", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| !c.0.code.is_empty())));
+        let compact = format!("{name}\0").into_bytes();
+        let map = [&[0xa0][..], &compact].concat();
+        let boxes = w.plaintexts();
+        assert_eq!(boxes.iter().any(|b| b.starts_with(&map)), v == 3, "version {v}: the map form");
+        assert_eq!(boxes.iter().any(|b| b.starts_with(&compact)), v == 4, "version {v}: the compact form");
+    }
 }

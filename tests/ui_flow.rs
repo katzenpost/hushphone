@@ -50,14 +50,17 @@ fn make_a_group_and_talk() {
         Setup {
             cache_dir: data.join("cache"),
             files_dir: files.clone(),
-            data_dir: data,
+            data_dir: data.clone(),
             source: Source::Memory(Default::default()),
             default_daemon: String::new(),
             name: Some("alice".into()),
+            wire_version: Some(3),
             old_defaults: Vec::new(),
             keys: hushphone::backend::Keys::None,
         },
     );
+    // --wire-version is saved for later starts, and the backend reads it from the settings.
+    assert_eq!(hushphone::settings::Settings::load(&data).0.wire_version, Some(3));
     ui.show().unwrap();
     let weak = ui.as_weak();
     slint::spawn_local(async move {
