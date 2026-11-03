@@ -13,6 +13,8 @@ export struct ChatItem {
     time: string,
     unread: int,
     joining: bool,
+    // Still minting the voucher to join with; otherwise its code is ready.
+    minting: bool,
     members: int,
     tint: int,
 }
@@ -62,6 +64,8 @@ export struct MemberItem {
 // What the host pushes into the UI.
 export global AppState {
     in property <[ChatItem]> chats;
+    // The groups still joining: each is a voucher the user may cancel.
+    in property <[ChatItem]> pending;
     in property <[LineItem]> lines;
     in property <[MemberItem]> members;
     in property <Connection> connection: Connection.connecting;

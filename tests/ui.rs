@@ -5,10 +5,10 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use hushphone::{Actions, AppState, AppWindow, Clock, Overlay};
+use hushphone::{Actions, AppState, AppWindow, ChatItem, Clock, Overlay};
 use i_slint_backend_testing::{ElementHandle, mock_elapsed_time};
 use slint::platform::PointerEventButton;
-use slint::{ComponentHandle, LogicalSize};
+use slint::{ComponentHandle, LogicalSize, ModelRc, VecModel};
 
 fn window() -> AppWindow {
     i_slint_backend_testing::init_no_event_loop();
@@ -237,4 +237,36 @@ fn attaching_picks_from_the_send_directory() {
     sends[0].mock_single_click(PointerEventButton::Left);
     assert_eq!(*sent.borrow(), "report.pdf");
     assert_eq!(ui.get_overlay(), Overlay::None);
+}
+
+/// Every pending voucher is listed in one place, whatever group is open, and can be cancelled from
+/// there: the cancel selects that group and asks for confirmation; nothing goes before it is given.
+#[test]
+fn pending_vouchers_are_listed_and_cancelled_from_the_menu() {
+    let ui = window();
+    let selected = Rc::new(std::cell::RefCell::new(String::new()));
+    let s = selected.clone();
+    ui.global::<Actions>().on_select_chat(move |id| *s.borrow_mut() = id.to_string());
+    let cancelled = Rc::new(Cell::new(0));
+    let c = cancelled.clone();
+    ui.global::<Actions>().on_leave(move || c.set(c.get() + 1));
+    let pending = |id: &str, name: &str, minting: bool| ChatItem {
+        id: id.into(),
+        name: name.into(),
+        initial: name[..1].to_uppercase().into(),
+        joining: true,
+        minting,
+        ..Default::default()
+    };
+    let st = ui.global::<AppState>();
+    st.set_pending(ModelRc::new(VecModel::from(vec![pending("g", "friends", false), pending("h", "work", true)])));
+    ui.set_overlay(Overlay::Pending);
+    mock_elapsed_time(Duration::from_millis(100));
+    let _ = button(&ui, "Cancel joining work");
+    let cancel = button(&ui, "Cancel joining friends");
+    mock_elapsed_time(Duration::from_millis(600));
+    cancel.mock_single_click(PointerEventButton::Left);
+    assert_eq!(*selected.borrow(), "g");
+    assert_eq!(ui.get_overlay(), Overlay::ConfirmLeave);
+    assert_eq!(cancelled.get(), 0, "nothing is deleted before it is confirmed");
 }

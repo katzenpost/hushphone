@@ -192,6 +192,7 @@ pub fn chat_item(view: &ChatView, last: Option<&LineView>, unread: usize, who: &
         time: last.map(|l| time_of(l.line.time, now)).unwrap_or_default().into(),
         unread: unread as i32,
         joining: !view.joined,
+        minting: view.minting,
         members: view.members.len() as i32,
         tint: text::tint(view.id.as_bytes()),
     }
