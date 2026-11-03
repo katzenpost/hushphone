@@ -45,12 +45,12 @@ the newcomer gave you and press **Add member**.
 ![Add a member: paste their voucher code](vouchers/invite-dialog.png)
 
 The header says *adding a member…* while hushphone reads the voucher and writes the group's keys
-into it. One newcomer is added at a time; a second code waits until this one is done.
+into it. One newcomer is added at a time; a second code is refused until this one is done.
 
 ![Reading the voucher](vouchers/adding.png)
 
 A notice in the group marks the moment they are in. From then on they read everything said in the
-group, including what was said before they joined.
+group. What was said before stays with those who were there.
 
 ![Added: they now read everything said in the group](vouchers/added.png)
 
@@ -73,4 +73,4 @@ same thing.
 - **Minting never finishes**: hushphone is not on the mixnet. The dot at the bottom left says so.
   Minting resumes once kpclientd is back.
 - **Added, but nothing arrives on the newcomer's side**: give it a few minutes. If a step failed,
-  the newcomer's joining page says which, in orange, and hushphone keeps trying.
+  the newcomer's joining page says which, highlighted, and hushphone keeps trying.
