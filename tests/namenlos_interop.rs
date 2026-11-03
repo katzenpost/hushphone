@@ -1,7 +1,8 @@
 //! The real app against a running kpclientd, driven through the same Actions the buttons fire,
 //! in one group with another client scripted from outside through files in $HUSH_INTEROP.
 //! It does nothing unless HUSH_INTEROP is set. HUSH_ROLE is host (default) or guest, HUSH_GROUP
-//! the group's name, HUSH_DAEMON the daemon's address, HUSH_EXPECT the text the other side sends.
+//! the group's name, HUSH_DAEMON the daemon's address, HUSH_EXPECT the text the other side sends,
+//! HUSH_NAME this side's name, HUSH_SAY and HUSH_SAY2 its two lines.
 //!   host:  create the group; wait for $HUSH_INTEROP/voucher; add that member; send; wait.
 //!   guest: join; write the voucher to $HUSH_INTEROP/hush.voucher; wait to be added; send; wait.
 //! Every few seconds the group's lines and state go to $HUSH_INTEROP/hush.lines; status lines go
@@ -91,6 +92,9 @@ fn namenlos_interop() {
     let role = std::env::var("HUSH_ROLE").unwrap_or_else(|_| "host".into());
     let daemon = std::env::var("HUSH_DAEMON").unwrap_or_else(|_| "@katzenpost".into());
     let other_text = std::env::var("HUSH_EXPECT").unwrap_or_else(|_| "from the mesh".into());
+    let my_name = std::env::var("HUSH_NAME").unwrap_or_else(|_| "hush".into());
+    let say = std::env::var("HUSH_SAY").unwrap_or_else(|_| "hello from hushphone".into());
+    let say_again = std::env::var("HUSH_SAY2").unwrap_or_else(|_| "hushphone read you".into());
 
     i_slint_backend_testing::init_integration_test_with_system_time();
     let data = dir.join("hush-data");
@@ -105,7 +109,7 @@ fn namenlos_interop() {
             data_dir: data.clone(),
             source: Source::Daemon(daemon),
             default_daemon: String::new(),
-            name: Some("hush".into()),
+            name: Some(my_name),
             old_defaults: Vec::new(),
             keys: hushphone::backend::Keys::None,
         },
@@ -166,11 +170,11 @@ fn namenlos_interop() {
             status(&format!("joined {group}"));
         }
 
-        act.invoke_send_text("hello from hushphone".into());
+        act.invoke_send_text(say.as_str().into());
         until("my line to be written", 600, || {
             st.get_lines().iter().any(|l| {
                 l.mine
-                    && l.text == "hello from hushphone"
+                    && l.text == say.as_str()
                     && l.delivery != Delivery::Queued
                     && l.delivery != Delivery::None
             })
@@ -191,11 +195,11 @@ fn namenlos_interop() {
         print!("{}", dump(&dir, &ui));
         status("got the other side's line");
         // A second message carries the read acknowledgement for theirs.
-        act.invoke_send_text("hushphone read you".into());
+        act.invoke_send_text(say_again.as_str().into());
         until("the second line to be written", 600, || {
             st.get_lines().iter().any(|l| {
                 l.mine
-                    && l.text == "hushphone read you"
+                    && l.text == say_again.as_str()
                     && l.delivery != Delivery::Queued
                     && l.delivery != Delivery::None
             })
@@ -205,7 +209,7 @@ fn namenlos_interop() {
         while !st
             .get_lines()
             .iter()
-            .any(|l| l.mine && l.text == "hello from hushphone" && l.delivery == Delivery::Read)
+            .any(|l| l.mine && l.text == say.as_str() && l.delivery == Delivery::Read)
         {
             if Instant::now() > deadline {
                 status("no read receipt within the wait");
