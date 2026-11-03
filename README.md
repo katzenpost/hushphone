@@ -22,7 +22,10 @@ The same group on the desktop and on Android, over the namenlos mixnet. jules is
 
 ## Linux
 
+Building needs `pkg-config`, ALSA and fontconfig:
+
 ```sh
+sudo apt install pkg-config libasound2-dev libfontconfig-dev
 cargo run --release -- --daemon @katzenpost
 ```
 
@@ -34,8 +37,6 @@ cargo run --release -- --daemon @katzenpost
 | `--name NAME` | your name, on the first start; otherwise hushphone asks |
 | `--sim SOCKET` | use `pigeonhole-sim` instead of the mixnet |
 | `--memory` | an in-memory Pigeonhole: nothing leaves the process |
-
-Recording needs ALSA (`libasound2-dev` to build).
 
 ### Debian package
 
