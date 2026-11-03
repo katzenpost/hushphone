@@ -10,6 +10,7 @@ pub mod effects;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod harden;
 pub mod keys;
+pub mod mesh;
 pub mod model;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod sandbox;
