@@ -83,6 +83,7 @@ struct App {
     /// Which group a recording in progress is for.
     recording_for: Option<ChatId>,
     chat_model: Rc<VecModel<ChatItem>>,
+    pending_model: Rc<VecModel<ChatItem>>,
     line_model: Rc<VecModel<LineItem>>,
     member_model: Rc<VecModel<MemberItem>>,
     attach_model: Rc<VecModel<AttachItem>>,
@@ -123,6 +124,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         settings.daemon = setup.default_daemon.clone();
     }
     let chat_model = Rc::new(VecModel::default());
+    let pending_model = Rc::new(VecModel::default());
     let line_model = Rc::new(VecModel::default());
     let member_model = Rc::new(VecModel::default());
     let attach_model = Rc::new(VecModel::default());
@@ -130,6 +132,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     ui.global::<crate::Clock>().on_now(move || start.elapsed().as_millis() as i64);
     let st = ui.global::<AppState>();
     st.set_chats(ModelRc::from(chat_model.clone()));
+    st.set_pending(ModelRc::from(pending_model.clone()));
     st.set_lines(ModelRc::from(line_model.clone()));
     st.set_members(ModelRc::from(member_model.clone()));
     st.set_attachable(ModelRc::from(attach_model.clone()));
@@ -163,6 +166,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         ticket: 0,
         recording_for: None,
         chat_model,
+        pending_model,
         line_model,
         member_model,
         attach_model,
@@ -658,7 +662,9 @@ impl App {
             })
             .collect();
         items.sort_by_key(|i| std::cmp::Reverse(i.0));
-        sync(&self.chat_model, items.into_iter().map(|(_, i)| i).collect());
+        let items: Vec<ChatItem> = items.into_iter().map(|(_, i)| i).collect();
+        sync(&self.pending_model, items.iter().filter(|i| i.joining).cloned().collect());
+        sync(&self.chat_model, items);
     }
 
     fn render_current(&mut self) {

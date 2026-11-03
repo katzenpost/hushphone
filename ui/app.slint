@@ -130,6 +130,7 @@ component Sidebar inherits Rectangle {
     callback open-chat(string);
     callback new-group();
     callback join-group();
+    callback pending();
     callback settings();
     background: Theme.sidebar;
 
@@ -262,6 +263,11 @@ component Sidebar inherits Rectangle {
                     text: "Join a group";
                     icon: @image-url("icons/join.svg");
                     activated => { menu.close(); root.join-group(); }
+                }
+                MenuEntry {
+                    text: "Pending vouchers";
+                    icon: @image-url("icons/clock.svg");
+                    activated => { menu.close(); root.pending(); }
                 }
             }
         }
@@ -887,6 +893,49 @@ component MembersDialog inherits Dialog {
     }
 }
 
+// Every group still joining, however it was started: its voucher's state, and a way to cancel it.
+component PendingDialog inherits Dialog {
+    callback cancel(string);
+    panel-width: 460px;
+    Hint { text: "A voucher is pending until a member of the group adds you with its code. Cancelling deletes the voucher from this device."; }
+    if AppState.pending.length == 0: Hint { text: "No vouchers are pending."; }
+    ListView {
+        min-height: min(360px, AppState.pending.length * 56px + 8px);
+        for chat in AppState.pending: HorizontalLayout {
+            height: 56px;
+            spacing: Theme.s3;
+            Avatar { y: (parent.height - self.height) / 2; initial: chat.initial; tint: chat.tint; }
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                Text {
+                    text: chat.name;
+                    color: Theme.text;
+                    font-size: Theme.fs-body;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+                Text {
+                    text: chat.minting ? "minting the voucher over the mixnet…" : "voucher code ready · waiting to be added";
+                    color: Theme.text-faint;
+                    font-size: Theme.fs-small;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+            }
+            IconButton {
+                y: (parent.height - self.height) / 2;
+                size: 36px;
+                icon: @image-url("icons/close.svg");
+                label: "Cancel joining " + chat.name;
+                tint: Theme.danger;
+                tint-active: Theme.danger;
+                activated => { root.cancel(chat.id); }
+            }
+        }
+    }
+}
+
 // The files in the send directory, for the user to pick one to send. The list is what the host
 // read when the dialog opened; Refresh reads it again.
 component AttachDialog inherits Dialog {
@@ -982,7 +1031,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, settings, rename, petname, attach, confirm-leave, confirm-clear, confirm-remove }
+export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, confirm-leave, confirm-clear, confirm-remove }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1036,6 +1085,7 @@ export component AppWindow inherits Window {
                 }
                 new-group => { root.overlay = Overlay.new-group; }
                 join-group => { root.overlay = Overlay.join; }
+                pending => { root.overlay = Overlay.pending; }
                 settings => { root.overlay = Overlay.settings; }
             }
             Rectangle {
@@ -1199,6 +1249,15 @@ export component AppWindow inherits Window {
                 remove-member(m) => {
                     root.target = m;
                     root.overlay = Overlay.confirm-remove;
+                }
+            }
+            if root.overlay == Overlay.pending: PendingDialog {
+                title: "Pending vouchers";
+                dismissed => { root.overlay = Overlay.none; }
+                // The confirmation is the group's own: it acts on the current group.
+                cancel(id) => {
+                    Actions.select-chat(id);
+                    root.overlay = Overlay.confirm-leave;
                 }
             }
             if root.overlay == Overlay.settings: SettingsDialog {
