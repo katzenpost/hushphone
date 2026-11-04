@@ -4,6 +4,7 @@ use hushphone::Setup;
 use hushphone::backend::Source;
 
 const USAGE: &str = "usage: hushphone [--daemon ADDRESS] [--sim SOCKET] [--memory] [--data DIR] [--files DIR] [--name NAME] [--wire-version 3|4]
+                 [--replica HOST:PORT | --rns-config DIR] [--box-size N]
 
   --daemon ADDRESS  kpclientd's thin client socket: @name, a path, or host:port (default @katzenpost)
   --sim SOCKET      use pigeonhole-sim at SOCKET instead of the mixnet
@@ -11,7 +12,11 @@ const USAGE: &str = "usage: hushphone [--daemon ADDRESS] [--sim SOCKET] [--memor
   --data DIR        keep state in DIR (default $XDG_DATA_HOME/hushphone)
   --files DIR       send files from DIR/send and save received ones in DIR/received (default ~/hushphone)
   --name NAME       your name, on the first start
-  --wire-version N  write and mint katzenqt1 wire version 3 (map form, long vouchers) or 4 (compact; default)";
+  --wire-version N  write and mint katzenqt1 wire version 3 (map form, long vouchers) or 4 (compact; default)
+  --replica HOST:PORT  reach a Pigeonhole replica over Reticulum, one TCP link from an instance of
+                       hushphone's own (built with --features mesh)
+  --rns-config DIR     use the Reticulum instance DIR describes instead (built with --features mesh)
+  --box-size N         the mesh's box plaintext size (default namenlos's, 1549)";
 
 fn main() {
     #[cfg(target_os = "linux")]
@@ -22,6 +27,9 @@ fn main() {
     let mut files = None;
     let mut name = None;
     let mut wire_version = None;
+    let mut replica: Option<String> = None;
+    let mut rns_config: Option<PathBuf> = None;
+    let mut box_size = 1549usize;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         let mut value = || {
@@ -45,6 +53,15 @@ fn main() {
                     std::process::exit(2);
                 }
             },
+            "--replica" => replica = Some(value()),
+            "--rns-config" => rns_config = Some(PathBuf::from(value())),
+            "--box-size" => {
+                let v = value();
+                box_size = v.parse().unwrap_or_else(|_| {
+                    eprintln!("--box-size is a number of bytes, not {v}\n{USAGE}");
+                    std::process::exit(2)
+                })
+            }
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return;
@@ -60,6 +77,9 @@ fn main() {
         Some(d) => d.join("cache"),
         None => dirs::cache_dir().unwrap_or_else(|| PathBuf::from(".")).join("hushphone"),
     };
+    if replica.is_some() || rns_config.is_some() {
+        source = Some(mesh_source(replica, rns_config, box_size, &data_dir));
+    }
     let files_dir = files.unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join("hushphone"));
     let default_daemon = "@katzenpost".to_string();
     let setup = Setup {
@@ -77,4 +97,29 @@ fn main() {
         eprintln!("hushphone: {e}");
         std::process::exit(1);
     }
+}
+
+#[cfg(feature = "mesh")]
+fn mesh_source(replica: Option<String>, rns_config: Option<PathBuf>, box_size: usize, data_dir: &std::path::Path) -> Source {
+    let dir = match (replica, rns_config) {
+        (Some(_), Some(_)) => {
+            eprintln!("--replica and --rns-config are two ways to reach the mesh; give one\n{USAGE}");
+            std::process::exit(2)
+        }
+        (Some(r), None) => match hushphone::mesh::replica_config(data_dir, &r) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("{e}\n{USAGE}");
+                std::process::exit(2)
+            }
+        },
+        (None, d) => d.expect("one of the two"),
+    };
+    Source::Mesh(Some(dir), box_size)
+}
+
+#[cfg(not(feature = "mesh"))]
+fn mesh_source(_: Option<String>, _: Option<PathBuf>, _: usize, _: &std::path::Path) -> Source {
+    eprintln!("this hushphone was built without the mesh; build it with --features mesh");
+    std::process::exit(2)
 }
