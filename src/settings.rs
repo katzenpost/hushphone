@@ -23,6 +23,9 @@ pub struct Settings {
     pub name: String,
     pub daemon: String,
     pub theme: ThemeChoice,
+    /// The katzenqt1 wire version written and minted, 3 or 4; 4 when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wire_version: Option<u64>,
     /// Where an older version kept petnames; moved into the sealed contacts at start and
     /// emptied.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]

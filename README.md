@@ -35,6 +35,7 @@ cargo run --release -- --daemon @katzenpost
 | `--data DIR` | where state, settings and received files live (default `$XDG_DATA_HOME/hushphone`) |
 | `--files DIR` | the one directory hushphone reads your files from and writes them to (default `~/hushphone`) |
 | `--name NAME` | your name, on the first start; otherwise hushphone asks |
+| `--wire-version 3\|4` | the katzenqt1 wire version written and minted: 3 (map form, long vouchers) or 4 (compact; default); saved for later starts; both are read |
 | `--sim SOCKET` | use `pigeonhole-sim` instead of the mixnet |
 | `--memory` | an in-memory Pigeonhole: nothing leaves the process |
 

@@ -48,6 +48,7 @@ fn android_main(app: AndroidApp) {
         source: Source::Daemon(relay.to_string_lossy().into_owned()),
         default_daemon: relay.to_string_lossy().into_owned(),
         name: None,
+        wire_version: None,
         old_defaults: vec![OLD_DAEMON.into()],
         keys: crate::backend::Keys::System,
     };
