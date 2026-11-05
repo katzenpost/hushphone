@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The app's manifest, linked by scripts/build-apk.sh. No internet permission: hushphone
-     reaches the mixnet only through kpclientd-android's content provider. -->
+<!-- The app's manifest, linked by scripts/build-apk.sh. hushphone reaches the mixnet only
+     through kpclientd-android's content provider; the internet permission is for the mesh. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="network.katzenpost.hushphone">
 
     <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="36" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The Reticulum mesh: one TCP link to a replica. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- kpclientd-android's connect provider, the only way this app reaches the mixnet. -->
     <queries>

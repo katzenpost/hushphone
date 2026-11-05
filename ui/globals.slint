@@ -74,6 +74,11 @@ export global AppState {
     // The network named in user-visible text.
     out property <string> network: mesh ? "the Reticulum mesh" : "the mixnet";
     in property <string> daemon;
+    // Android: the user picks the mixnet or the mesh, and the replica, in Settings.
+    in property <bool> choose-transport;
+    // The transport saved, for the next start.
+    in property <bool> use-mesh;
+    in property <string> replica;
     in property <string> my-name;
     in-out property <string> current;
     in property <string> current-name;
@@ -125,7 +130,7 @@ export global Actions {
     callback scan();
     callback remove-member(string);
     callback set-petname(string, string);
-    callback save-settings(string);
+    callback save-settings(string, bool, string);
     callback choose-name(string);
     callback dismiss-notice();
 }

@@ -34,7 +34,7 @@ fn main() {
     let mut replica: Option<String> = None;
     let mut rns_config: Option<PathBuf> = None;
     let mut transport = "mixnet".to_string();
-    let mut box_size = 1549usize;
+    let mut box_size = hushphone::mesh::BOX_SIZE;
     let mut seen = Vec::new();
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {

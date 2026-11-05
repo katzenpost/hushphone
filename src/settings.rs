@@ -23,6 +23,12 @@ pub struct Settings {
     pub name: String,
     pub daemon: String,
     pub theme: ThemeChoice,
+    /// Android: `reticulum` for the mesh, through `replica`; the mixnet otherwise.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub transport: String,
+    /// The replica's Reticulum TCP interface, `host:port`; namenlos's bridge when empty.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub replica: String,
     /// The katzenqt1 wire version written and minted, 3 or 4; 4 when unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wire_version: Option<u64>,
@@ -56,6 +62,10 @@ impl Settings {
                 (Settings::default(), Some(format!("The settings could not be read and were moved to {}: {e}", aside.display())))
             }
         }
+    }
+
+    pub fn replica(&self) -> &str {
+        if self.replica.is_empty() { crate::mesh::BRIDGE } else { &self.replica }
     }
 
     pub fn save(&self, data_dir: &Path) -> std::io::Result<()> {
@@ -96,7 +106,12 @@ mod tests {
             theme: ThemeChoice::Dark,
             ..Settings::default()
         };
+        assert_eq!(s.replica(), crate::mesh::BRIDGE);
         s.save(dir.path()).unwrap();
+        assert_eq!(Settings::load(dir.path()), (s.clone(), None));
+        let s = Settings { transport: "reticulum".into(), replica: "10.0.0.1:4242".into(), ..s };
+        s.save(dir.path()).unwrap();
+        assert_eq!(Settings::load(dir.path()).0.replica(), "10.0.0.1:4242");
         assert_eq!(Settings::load(dir.path()), (s, None));
         #[cfg(unix)]
         {

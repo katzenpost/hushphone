@@ -145,6 +145,9 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     st.set_files_dir(if cfg!(target_os = "android") { String::new() } else { setup.files_dir.display().to_string() }.into());
     st.set_daemon(settings.daemon.clone().into());
     st.set_mesh(setup.source.is_mesh());
+    st.set_choose_transport(cfg!(target_os = "android"));
+    st.set_use_mesh(settings.transport == "reticulum");
+    st.set_replica(settings.replica().into());
     st.set_my_name(settings.name.clone().into());
     ui.global::<Theme>().set_preference(match settings.theme {
         ThemeChoice::System => ThemePreference::System,
@@ -281,9 +284,29 @@ fn wire(ui: &AppWindow) {
             app.render_all();
         });
     });
-    a.on_save_settings(|daemon| {
+    a.on_save_settings(|daemon, mesh, replica| {
         with_app(|app| {
             app.settings.daemon = daemon.trim().to_string();
+            if cfg!(target_os = "android") {
+                let replica = replica.trim();
+                if mesh && crate::mesh::host_port(replica).is_err() {
+                    app.notice(&format!("The replica's address is host:port, not {replica:?}."), true);
+                    return;
+                }
+                app.settings.transport = if mesh { "reticulum" } else { "" }.into();
+                app.settings.replica = replica.into();
+                app.state(|s| {
+                    s.set_use_mesh(mesh);
+                    s.set_replica(replica.into());
+                });
+                let now = match &app.setup.source {
+                    Source::Mesh(a, _) => Some(a.as_str()),
+                    _ => None,
+                };
+                if now != mesh.then_some(replica) {
+                    app.notice("The new transport is used the next time hushphone starts.", false);
+                }
+            }
             #[cfg(any(target_os = "linux", target_os = "android"))]
             if app.net.is_some_and(|n| !n.allows(crate::sandbox::Net::for_daemon(&app.settings.daemon))) {
                 app.notice("This app may only reach kpclientd over a unix socket until it restarts.", true);

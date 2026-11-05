@@ -34,18 +34,28 @@ fn android_main(app: AndroidApp) {
     }
     let data = private_dir(&app);
     slint::android::init(app).expect("Slint on Android");
-    // The thin client dials a unix socket in the app's private directory, where each connection
-    // is joined to one kpclientd-android hands out: no other app can reach it, and the app
-    // needs no network of its own.
+    // On the mixnet, the thin client dials a unix socket in the app's private directory, where
+    // each connection is joined to one kpclientd-android hands out: no other app can reach it.
+    // On the mesh, the app dials the replica over TCP itself.
     let relay = data.join("kpclientd.sock");
-    start_relay(relay.clone());
+    // Read without Settings::load, which would move a broken file aside before the app can say so.
+    let settings: crate::settings::Settings = std::fs::read_to_string(crate::settings::Settings::path(&data))
+        .ok()
+        .and_then(|t| toml::from_str(&t).ok())
+        .unwrap_or_default();
+    let source = if settings.transport == "reticulum" {
+        Source::Mesh(settings.replica().to_string(), crate::mesh::BOX_SIZE)
+    } else {
+        start_relay(relay.clone());
+        // Always the relay: it is part of the app, not a setting, and its place has moved before.
+        Source::Daemon(relay.to_string_lossy().into_owned())
+    };
     let setup = crate::Setup {
         cache_dir: data.join("cache"),
         // Unused here: the system's document picker stands in for the files directory.
         files_dir: data.join("files"),
         data_dir: data,
-        // Always the relay: it is part of the app, not a setting, and its place has moved before.
-        source: Source::Daemon(relay.to_string_lossy().into_owned()),
+        source,
         default_daemon: relay.to_string_lossy().into_owned(),
         name: None,
         wire_version: None,
