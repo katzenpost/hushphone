@@ -1,6 +1,7 @@
 # Security notes
 
-This document covers three topics:
+This document covers four topics:
+- what hushphone does to keep its user safe;
 - where hushphone and the libraries it depends on leave safe Rust, and why;
 - how they keep critical data (keys, capabilities, messages, voice clips) from leaking out of memory;
 - how the interface is designed so that what the app does matches what the user meant.
@@ -8,6 +9,85 @@ This document covers three topics:
 Line numbers are those of the revisions pinned in `Cargo.toml`:
 - pigeonhole_protocols `ad9d3e2`;
 - rustic_audio `0be6248`.
+
+## What hushphone does
+
+
+hushphone follows Paw's
+[GUI security guidelines](https://github.com/katzenpost/paw/blob/main/docs/GUI_SECURITY_GUIDELINES.md):
+whatever other members send is untrusted.
+
+- **Names.** A member's own name is shown as `~name`. Your own name for a member is shown in bold
+  instead, and only to you. Names that look alike show 64 bits of the member's key, too many for
+  a member to make a key that matches another's. Names and file names lose every character
+  Unicode renders as nothing (bidi controls, joiners, variation selectors, fillers, tags), and
+  runs of whitespace.
+- **Content stays in its frame.** Messages are plain text, clipped to their bubble. Long words get
+  places to break. The app's own notices use a frame that no message can draw.
+- **Controls wait before acting.** A control takes no click until it has been still, and about
+  the same message, for half a second, so a message that arrives and moves the layout, or a row
+  that comes to show another message, cannot steer a click. A dangerous button in a confirmation
+  waits 0.7 s, and the safe one has the focus.
+- **Authority follows the user's action.** Only the window's own callbacks can copy, paste, open
+  the microphone, pick or save a file; nothing that arrives from the network can. Received files
+  are never saved on their own, and their type is read from their bytes, not their name. A
+  recording indicator is shown for exactly as long as the microphone is open.
+- **Files pass through one directory.** On Linux, hushphone reads only `~/hushphone/send` and
+  writes only `~/hushphone/received`; its sandbox lets it see no other file of yours. The desktop's
+  file chooser is not used, since it hands an app a path and leaves it to read the file with the
+  user's whole authority. On Android, the system's document picker hands over one file at a time
+  and nothing else; hushphone holds no storage permission.
+- **Notices never take over.** Dialogs open only from your own action. Notices from the network
+  never take the focus.
+- **Encrypted at rest.** As Signal does with its database, hushphone keeps its state file
+  encrypted whole, with no passphrase: the groups, their caps and every message are in one file,
+  `state.sealed`, that is written out encrypted after every change. Each attachment and voice clip
+  beside it is encrypted whole too. Both use XChaCha20-Poly1305 under a random key that the system
+  keeps for hushphone. All that can be seen on disk is how many files there are, how large, and
+  their names.
+  - On Linux, the key is kept in the session's keyring (the Secret Service: GNOME Keyring or
+    KWallet), which unlocks when you log in. With no keyring running, hushphone keeps its state
+    unsealed and says so in a strip under the group list.
+  - On Android, the key is wrapped by an AES key held in Android's Keystore, in StrongBox where the
+    phone has one, and never leaves it.
+  - A copy of the files, from a backup or a lost disk, cannot be read without that key. Someone
+    who can run programs as you while you are logged in (or as hushphone, on an unlocked phone)
+    can ask for the key, as hushphone does.
+  - Voice clips are recorded and played in memory, never in files. A clip being recorded or
+    encoded lives in guarded memory: between guard pages, locked out of swap where the system
+    allows, left out of core dumps, and wiped when freed.
+  - A file you open with another program has to be written out unsealed for it, in hushphone's
+    cache; it is wiped the next time and when hushphone starts.
+  - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
+    copy is written over and removed, but flash storage may still hold its old blocks.
+- **On disk.** Settings (your name, the daemon's address, the theme, the wire version) are written with mode 0600
+  and are not sealed. The names you give members, with their keys, and what you have read are a
+  contact list, so they are kept with the state, sealed when it is. A file you save is written
+  out plain in `~/hushphone/received`, since that is what saving is for. Logs hold no message
+  text.
+- **Sandboxed.** On the mixnet, kpclientd does all the networking, so hushphone needs very little
+  of the system.
+  - **seccomp.** Once hushphone knows how it reaches Pigeonhole, it puts a seccomp filter on every
+    thread. With kpclientd on a unix socket, as on Linux (`@katzenpost`), it may open unix
+    sockets only, with no TCP or UDP at all. With kpclientd at `host:port`, or on a Reticulum
+    transport, it may also open TCP sockets, but still no UDP or raw ones. In either case it cannot start a program,
+    trace a process or read its memory, use io_uring, BPF or perf, load kernel modules, mount, or
+    change namespaces. The filter cannot be lifted while the app runs, so a TCP address set in
+    Settings takes effect after a restart. `HUSHPHONE_SANDBOX=off` leaves the filter off, for
+    debugging.
+  - **AppArmor.** The Debian package installs an AppArmor profile, `/etc/apparmor.d/hushphone`. It
+    allows no IP and no programs; reads of `~/hushphone/send` and writes to `~/hushphone/received`
+    and hushphone's own data and cache, and nothing else of yours; the daemon's socket,
+    `@katzenpost`, the display and the sound server; and on the session bus only the bus itself and
+    the keyring, so that neither the user's systemd nor the portals can be asked to run or open
+    anything. To reach kpclientd over TCP or the mesh, or kpclientd at another
+    abstract socket, add the rule the profile
+    names in its comment to `/etc/apparmor.d/local/hushphone`.
+  - **If the filter cannot be applied,** hushphone does not connect; it says so, and
+    `HUSHPHONE_SANDBOX=off` is the way to run without the filter on purpose.
+  - **Android.** hushphone gets its connections to kpclientd from kpclientd-android, as unix
+    sockets, so the unix-only filter applies there too, on top of Android's own SELinux and
+    seccomp sandbox. The app does not even ask for the internet permission.
 
 ## Unsafe code
 
@@ -106,7 +186,7 @@ Data that passes through only briefly, or has to be an ordinary `Vec` for anothe
 
 ### Around the process
 
-Wiping memory matters little if the whole process can be read. `harden::process` (item 1) prevents core dumps and ptrace or `/proc/<pid>/mem` access from the user's other processes. `harden::data_dir` makes the data directory owner-only. On Android, `FLAG_SECURE` keeps the app out of screenshots, screen recordings and the recent-apps thumbnails. A seccomp filter on every thread, and on Debian the AppArmor profile in `packaging/apparmor`, keep it from starting programs or tracing and reading other processes (see the README's Security section). The seccomp filter is not optional: if it cannot be applied, the app does not connect to the daemon. The AppArmor profile also keeps the app off everything on the session bus but the keyring, since the user's systemd and the portals would otherwise start programs and open files for it, and off every unix socket but the daemon's, the display's and the sound server's.
+Wiping memory matters little if the whole process can be read. `harden::process` (item 1) prevents core dumps and ptrace or `/proc/<pid>/mem` access from the user's other processes. `harden::data_dir` makes the data directory owner-only. On Android, `FLAG_SECURE` keeps the app out of screenshots, screen recordings and the recent-apps thumbnails. A seccomp filter on every thread, and on Debian the AppArmor profile in `packaging/apparmor`, keep it from starting programs or tracing and reading other processes (see What hushphone does above). The seccomp filter is not optional: if it cannot be applied, the app does not connect to the daemon. The AppArmor profile also keeps the app off everything on the session bus but the keyring, since the user's systemd and the portals would otherwise start programs and open files for it, and off every unix socket but the daemon's, the display's and the sound server's.
 
 ## Known gaps
 
@@ -123,7 +203,7 @@ Once the process exits, the operating system reclaims its memory, so these gaps 
 
 ## Secure interaction design
 
-Memory protection does nothing for a user who is misled into the wrong action. Ka-Ping Yee's chapter [1] asks how a system can protect the interests of its legitimate user, and offers ten guidelines and two strategies for it. Yee's core point is that security comes from what the user initiates, not from warnings the user has to react to. The README's Security section lists what hushphone does, following Paw's GUI security guidelines. This section relates those measures to Yee's terms.
+Memory protection does nothing for a user who is misled into the wrong action. Ka-Ping Yee's chapter [1] asks how a system can protect the interests of its legitimate user, and offers ten guidelines and two strategies for it. Yee's core point is that security comes from what the user initiates, not from warnings the user has to react to. What hushphone does, above, lists its measures, following Paw's GUI security guidelines. This section relates those measures to Yee's terms.
 
 ### The two strategies
 
