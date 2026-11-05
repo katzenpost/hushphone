@@ -71,6 +71,8 @@ export global AppState {
     in property <Connection> connection: Connection.connecting;
     // Reached over a Reticulum mesh rather than through kpclientd.
     in property <bool> mesh;
+    // The network named in user-visible text.
+    out property <string> network: mesh ? "the Reticulum mesh" : "the mixnet";
     in property <string> daemon;
     in property <string> my-name;
     in-out property <string> current;

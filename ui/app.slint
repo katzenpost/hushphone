@@ -604,7 +604,7 @@ component JoiningPanel {
             HorizontalLayout {
                 spacing: Theme.s3;
                 Spinner { indeterminate: true; width: 24px; height: 24px; }
-                Hint { text: "Minting a voucher over the mixnet. This can take a minute."; vertical-alignment: center; }
+                Hint { text: "Minting a voucher over \{AppState.network}. This can take a minute."; vertical-alignment: center; }
             }
             if AppState.joining-note != "": Hint { text: AppState.joining-note; color: Theme.warn; }
             HorizontalLayout {
@@ -775,7 +775,7 @@ component Welcome inherits Rectangle {
             Icon { icon: @image-url("icons/hush.svg"); tint: Theme.accent; size: 56px; }
         }
         Text {
-            text: "Group chat over the Katzenpost mixnet";
+            text: AppState.mesh ? "Group chat over a Reticulum mesh" : "Group chat over the Katzenpost mixnet";
             color: Theme.text;
             font-size: Theme.fs-heading;
             font-weight: 700;
@@ -783,7 +783,7 @@ component Welcome inherits Rectangle {
             wrap: word-wrap;
         }
         Text {
-            text: "Messages, files and voice travel through the mixnet and are stored by its replicas. No server sees who talks to whom.";
+            text: "Messages, files and voice travel through \{AppState.network} and are stored by its replicas. No server sees who talks to whom.";
             color: Theme.text-muted;
             font-size: Theme.fs-body;
             horizontal-alignment: center;
@@ -931,7 +931,7 @@ component PendingDialog inherits Dialog {
                     wrap: no-wrap;
                 }
                 Text {
-                    text: chat.minting ? "minting the voucher over the mixnet…" : "voucher code ready · waiting to be added";
+                    text: chat.minting ? "minting the voucher over \{AppState.network}…" : "voucher code ready · waiting to be added";
                     color: Theme.text-faint;
                     font-size: Theme.fs-small;
                     overflow: elide;
@@ -1202,7 +1202,7 @@ export component AppWindow inherits Window {
             if root.overlay == Overlay.join: NameDialog {
                 title: "Join a group";
                 label: "What you will call the group";
-                hint: "hushphone mints a voucher code over the mixnet. Give it to a member of the group, who adds you with it.";
+                hint: "hushphone mints a voucher code over \{AppState.network}. Give it to a member of the group, who adds you with it.";
                 action: "Get a voucher";
                 dismissed => { root.overlay = Overlay.none; }
                 submitted(v) => {

@@ -270,3 +270,12 @@ fn pending_vouchers_are_listed_and_cancelled_from_the_menu() {
     assert_eq!(ui.get_overlay(), Overlay::ConfirmLeave);
     assert_eq!(cancelled.get(), 0, "nothing is deleted before it is confirmed");
 }
+
+#[test]
+fn text_names_the_transport_in_use() {
+    let ui = window();
+    let st = ui.global::<AppState>();
+    assert_eq!(st.get_network(), "the mixnet");
+    st.set_mesh(true);
+    assert_eq!(st.get_network(), "the Reticulum mesh");
+}
