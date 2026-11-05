@@ -29,23 +29,38 @@ sudo apt install pkg-config libasound2-dev libfontconfig-dev
 cargo run --release -- --daemon @katzenpost
 ```
 
+hushphone reaches Pigeonhole over one of three transports, chosen with `--transport`:
+
+- `mixnet` (default): the Katzenpost mixnet, through kpclientd.
+- `reticulum`: a Reticulum mesh, through [Reticulum-rs](https://github.com/BeechatNetworkSystemsLtd/Reticulum-rs), in Rust.
+- `reticulum-py`: a Reticulum mesh, through the official Python RNS embedded with PyO3. It needs
+  `cargo build --features reticulum-py`, Python's development files (`python3-dev`) to build, and
+  the Python packages `rns`, `pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` at run time, in
+  the virtual environment `VIRTUAL_ENV` names or system-wide.
+
+```sh
+cargo run --release -- --transport reticulum --replica 162.220.11.225:4242
+```
+
+Members on the mesh and on the mixnet share groups through a bridge replica, such as namenlos's at
+`162.220.11.225:4242`. On `reticulum`, minting and redeeming contact vouchers fail for now: the
+Rust hpqc has no voucher module yet.
+
 | Flag | |
 |---|---|
-| `--daemon ADDRESS` | kpclientd's thin client socket: `@name`, a path, or `host:port` (default `@katzenpost`) |
+| `--transport mixnet\|reticulum\|reticulum-py` | how Pigeonhole is reached (default `mixnet`) |
+| `--daemon ADDRESS` | mixnet: kpclientd's thin client socket: `@name`, a path, or `host:port` (default `@katzenpost`) |
+| `--replica HOST:PORT` | reticulum, reticulum-py: a replica's Reticulum TCP interface, over one TCP link from a Reticulum instance of hushphone's own |
+| `--rns-config DIR` | reticulum-py: the Reticulum instance `DIR` describes, instead of `--replica` |
+| `--box-size N` | reticulum, reticulum-py: the box plaintext size (default namenlos's, 1549) |
+| `--sim SOCKET` | for testing: `pigeonhole-sim` instead of a transport |
+| `--memory` | for testing: an in-memory Pigeonhole; nothing leaves the process |
 | `--data DIR` | where state, settings and received files live (default `$XDG_DATA_HOME/hushphone`) |
 | `--files DIR` | the one directory hushphone reads your files from and writes them to (default `~/hushphone`) |
 | `--name NAME` | your name, on the first start; otherwise hushphone asks |
 | `--wire-version 3\|4` | the katzenqt1 wire version written and minted: 3 (map form, long vouchers) or 4 (compact; default); saved for later starts; both are read |
-| `--sim SOCKET` | use `pigeonhole-sim` instead of the mixnet |
-| `--memory` | an in-memory Pigeonhole: nothing leaves the process |
-| `--replica HOST:PORT` | a Pigeonhole replica on a Reticulum mesh, over one TCP link from a Reticulum instance of hushphone's own; namenlos's bridge replica is `162.220.11.225:4242` |
-| `--rns-config DIR` | the Reticulum instance `DIR` describes, instead of `--replica` |
-| `--box-size N` | the mesh's box plaintext size (default namenlos's, 1549) |
 
-The mesh flags need `cargo build --features mesh`, which embeds Python through PyO3. The Python
-packages `rns`, `pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` must be installed, in the
-virtual environment `VIRTUAL_ENV` names or system-wide. Members on the mesh and on the mixnet share
-groups through a bridge replica.
+Flags that do not go with the transport, such as `--daemon` with `reticulum`, are refused.
 
 ### Debian package
 
@@ -56,6 +71,10 @@ podman. The package installs the app, its desktop entry and its icon:
 make deb                      # or: make deb DISTRO=ubuntu-24.04
 sudo apt install ./dist/hushphone_*.deb
 ```
+
+Its AppArmor profile allows no IP sockets, so `--transport reticulum` and a kpclientd at
+`host:port` need the TCP lines the profile's head comment gives, in
+`/etc/apparmor.d/local/hushphone`.
 
 The package is reproducible. `make deb-ci`, run in the build container as CI does, builds it,
 installs and tests it, then builds it again in another directory and checks that both packages

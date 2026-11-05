@@ -6,14 +6,7 @@ use std::path::{Path, PathBuf};
 /// returns its directory. Written on every start, so a changed address takes effect; the identity
 /// and storage beside it stay. Same layout as katzenrns's `--replica`.
 pub fn replica_config(data_dir: &Path, replica: &str) -> Result<PathBuf, String> {
-    let (host, port) = replica
-        .rsplit_once(':')
-        .filter(|(h, p)| !h.is_empty() && !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
-        .ok_or_else(|| format!("--replica wants HOST:PORT, got {replica:?}"))?;
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    if host.chars().any(|c| c.is_whitespace() || c == '[' || c == ']') {
-        return Err(format!("--replica wants HOST:PORT, got {replica:?}"));
-    }
+    let (host, port) = host_port(replica)?;
     let dir = data_dir.join("reticulum");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let config = format!(
@@ -24,6 +17,21 @@ pub fn replica_config(data_dir: &Path, replica: &str) -> Result<PathBuf, String>
     );
     std::fs::write(dir.join("config"), config).map_err(|e| format!("{}: {e}", dir.display()))?;
     Ok(dir)
+}
+
+/// `replica`'s host, without brackets, and port; an error naming `--replica` if it is not
+/// `host:port`.
+pub fn host_port(replica: &str) -> Result<(&str, &str), String> {
+    let bad = || format!("--replica wants HOST:PORT, got {replica:?}");
+    let (host, port) = replica
+        .rsplit_once(':')
+        .filter(|(h, p)| !h.is_empty() && !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+        .ok_or_else(bad)?;
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if host.chars().any(|c| c.is_whitespace() || c == '[' || c == ']') {
+        return Err(bad());
+    }
+    Ok((host, port))
 }
 
 #[cfg(test)]

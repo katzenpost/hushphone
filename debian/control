@@ -33,7 +33,8 @@ Description: group chat with push-to-talk voice over the Katzenpost mixnet
  push-to-talk voice messages. Its groups are shared with katzenqt, jam and
  frank_chat.
  .
- It does no networking of its own: it talks to a running Katzenpost client
- daemon, kpclientd, over its socket. An AppArmor profile, and a seccomp filter
+ By default it does no networking of its own: it talks to a running Katzenpost
+ client daemon, kpclientd, over its socket. It can instead reach a Pigeonhole
+ replica on a Reticulum mesh, over TCP. An AppArmor profile, and a seccomp filter
  the program puts on itself, leave it no IP sockets and no way to start other
  programs.

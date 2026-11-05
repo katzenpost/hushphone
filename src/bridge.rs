@@ -144,6 +144,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     st.set_attachable(ModelRc::from(attach_model.clone()));
     st.set_files_dir(if cfg!(target_os = "android") { String::new() } else { setup.files_dir.display().to_string() }.into());
     st.set_daemon(settings.daemon.clone().into());
+    st.set_mesh(setup.source.is_mesh());
     st.set_my_name(settings.name.clone().into());
     ui.global::<Theme>().set_preference(match settings.theme {
         ThemeChoice::System => ThemePreference::System,
@@ -389,8 +390,7 @@ impl App {
             use crate::sandbox::{self, Net};
             let net = match &source {
                 Source::Daemon(a) => Net::for_daemon(a),
-                #[cfg(feature = "mesh")]
-                Source::Mesh(..) => Net::Tcp,
+                s if s.is_mesh() => Net::Tcp,
                 _ => Net::Unix,
             };
             // Without the filter the app does not go on: HUSHPHONE_SANDBOX=off is the way

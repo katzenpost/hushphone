@@ -5,7 +5,8 @@
 # keyring (the Secret Service): not to the user's systemd, which would start programs for it,
 # nor to the portals.
 #
-# A kpclientd reached at host:port needs TCP; allow it in /etc/apparmor.d/local/hushphone with
+# A kpclientd reached at host:port, and the Reticulum transports (--transport reticulum or
+# reticulum-py), need TCP; allow it in /etc/apparmor.d/local/hushphone with
 #   network inet stream,
 #   network inet6 stream,
 # A kpclientd at another abstract socket than @katzenpost needs

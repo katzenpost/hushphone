@@ -69,6 +69,8 @@ export global AppState {
     in property <[LineItem]> lines;
     in property <[MemberItem]> members;
     in property <Connection> connection: Connection.connecting;
+    // Reached over a Reticulum mesh rather than through kpclientd.
+    in property <bool> mesh;
     in property <string> daemon;
     in property <string> my-name;
     in-out property <string> current;
