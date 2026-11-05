@@ -37,6 +37,7 @@ infer = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = "0.8"
 zeroize = "1"
+qrcodegen = "1.8"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 seccompiler = "0.5"
@@ -59,6 +60,7 @@ slint-build = "=1.18.1"
 i-slint-backend-testing = "=1.18.1"
 tempfile = "3"
 proptest = "1"
+rqrr = { version = "0.11", default-features = false }
 
 # The Android manifest is packaging/android/AndroidManifest.xml; scripts/build-apk.sh makes the APK.
 

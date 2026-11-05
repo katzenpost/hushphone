@@ -29,10 +29,11 @@ time it runs.
 
 ![Minting a voucher over the mixnet](vouchers/minting.png)
 
-Once minted, the group's page shows the voucher code. Press **Copy code** and give it to a member
-of the group over a channel you trust. Then wait: nothing else is asked of you.
+Once minted, the group's page shows the voucher code, also as a QR code: any QR scanner reads it
+as the code's text. Press **Copy code**, or let them scan it, and give it to a member of the group
+over a channel you trust. Then wait: nothing else is asked of you.
 
-![The voucher code, ready to copy](vouchers/voucher-code.png)
+![The voucher code, as a QR code and ready to copy](vouchers/voucher-code.png)
 
 When the member adds the code, the group's messages and members appear on your side, and the
 *Joining…* mark goes. The wait is the mixnet's: a few minutes is normal.
