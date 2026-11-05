@@ -18,6 +18,7 @@ use zeroize::Zeroizing;
 use crate::backend::{self, Attachments, Cmd, Keys, Link, Source, Update};
 use crate::contacts::Contacts;
 use crate::model::{self, Files};
+use crate::radio::Radio;
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
 use crate::{
@@ -84,6 +85,7 @@ struct App {
     current: Option<ChatId>,
     expanded: HashSet<usize>,
     voice: Voice,
+    radio: Radio,
     /// What the user picked last: a result for an older pick does not move the selection.
     ticket: u64,
     /// Which group a recording in progress is for.
@@ -179,6 +181,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         current: None,
         expanded: HashSet::new(),
         voice,
+        radio: Radio::default(),
         ticket: 0,
         recording_for: None,
         scanning: None,
@@ -374,6 +377,9 @@ fn wire(ui: &AppWindow) {
     a.on_toggle_voice(|line| {
         with_app(|app| app.toggle_voice(line as usize));
     });
+    a.on_toggle_radio(|| {
+        with_app(|app| app.toggle_radio());
+    });
     a.on_ptt_start(|| {
         with_app(|app| app.ptt_start(UserIntent::new()));
     });
@@ -385,6 +391,7 @@ fn wire(ui: &AppWindow) {
             app.voice.cancel();
             app.recording_for = None;
             app.state(|s| s.set_recording(false));
+            app.pump();
         });
     });
 }
@@ -463,6 +470,10 @@ impl App {
                     Err(e) => self.notice(&format!("Couldn't read your names for members: {e}"), true),
                 }
                 self.attachments = Some(a);
+                for id in self.contacts.radio.clone() {
+                    let last = self.chats.get(&id).map(|c| c.lines.last().map_or(0, |l| l.line.id));
+                    self.radio.set(&id, true, last);
+                }
                 // What an older version kept in the settings moves in with the state.
                 if self.contacts.adopt(&mut self.settings) {
                     if let Err(e) = self.save_contacts() {
@@ -514,10 +525,13 @@ impl App {
                 } else {
                     c.lines.retain(|l| !dropped.contains(&l.line.id));
                 }
+                let files = &self.files;
+                self.radio.arrived(&id, &c.lines, |a| files.types.contains_key(&a.file));
                 if self.current.as_deref() == Some(id.as_str()) {
                     c.seen = c.lines.last().map_or(0, |l| l.line.id);
                     self.remember_seen(&id);
                 }
+                self.pump();
                 self.render_chats();
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.render_current();
@@ -525,7 +539,9 @@ impl App {
             }
             Update::Removed(id) => {
                 self.chats.remove(&id);
-                if self.contacts.seen.remove(&id).is_some() {
+                self.radio.set(&id, false, None);
+                let had = self.contacts.radio.remove(&id) | self.contacts.played.remove(&id).is_some();
+                if self.contacts.seen.remove(&id).is_some() || had {
                     let _ = self.save_contacts();
                 }
                 if self.current.as_deref() == Some(id.as_str()) {
@@ -660,7 +676,7 @@ impl App {
 
     /// Save a line's attachment, read and written off this thread.
     fn save(&mut self, intent: UserIntent, line: usize) {
-        let Some((file, name)) = self.attachment(line) else { return };
+        let Some((file, name)) = self.current.as_ref().and_then(|c| self.attachment(c, line)) else { return };
         let Some(att) = self.attachments.clone() else { return };
         let dir = self.setup.files_dir.clone();
         self.effects.spawn(async move {
@@ -712,8 +728,8 @@ impl App {
 
     /// A line's attachment: its file in the state, and the name to give it; `None` until it has
     /// arrived.
-    fn attachment(&self, line: usize) -> Option<(String, String)> {
-        let c = self.chats.get(self.current.as_ref()?)?;
+    fn attachment(&self, chat: &str, line: usize) -> Option<(String, String)> {
+        let c = self.chats.get(chat)?;
         let l = c.lines.iter().find(|l| l.line.id == line)?;
         let a = l.line.attachment.as_ref()?;
         if !self.paths.get(&a.file)?.exists() {
@@ -771,6 +787,11 @@ impl App {
             i.playing = true;
             i.progress = (p.started.elapsed().as_secs_f32() / p.length.as_secs_f32().max(0.001)).min(1.0);
         }
+        let played = self.contacts.played.get(&v.id);
+        for i in items.iter_mut().filter(|i| i.kind == crate::LineKind::Voice && !i.mine) {
+            i.unplayed = !played.is_some_and(|p| p.contains(&(i.id as usize)));
+        }
+        st.set_current_radio(self.radio.is_on(&v.id));
         st.set_current(v.id.clone().into());
         st.set_current_name(text::name(&v.name).into());
         st.set_current_joined(v.joined);
@@ -788,19 +809,56 @@ impl App {
         let Some(chat) = self.current.clone() else { return };
         if self.voice.playing.as_ref().is_some_and(|p| p.chat == chat && p.line == line) {
             self.voice.stop_playing();
+            self.pump();
             self.render_current();
             return;
         }
-        let bytes = self.attachment(line).and_then(|(file, _)| self.attachments.as_ref()?.read(&file).ok());
+        self.play(&chat, line);
+    }
+
+    /// Play a received clip and mark it played.
+    fn play(&mut self, chat: &str, line: usize) {
+        let bytes = self.attachment(chat, line).and_then(|(file, _)| self.attachments.as_ref()?.read(&file).ok());
         let Some(bytes) = bytes else {
             self.notice("That voice message hasn't arrived yet.", true);
             return;
         };
-        if let Err(e) = self.voice.play(&chat, line, bytes) {
+        if let Err(e) = self.voice.play(chat, line, bytes) {
             self.notice(&format!("Couldn't play it: {e}"), true);
             return;
         }
+        if self.contacts.played.entry(chat.to_string()).or_default().insert(line) {
+            let _ = self.save_contacts();
+        }
         self.tick();
+        self.render_current();
+    }
+
+    /// Radio mode: play the next clip queued, once nothing is playing or recording.
+    fn pump(&mut self) {
+        if self.voice.playing.is_some() || self.voice.recording().is_some() {
+            return;
+        }
+        while self.voice.playing.is_none()
+            && let Some((chat, line)) = self.radio.next()
+        {
+            self.play(&chat, line);
+        }
+    }
+
+    fn toggle_radio(&mut self) {
+        let Some(chat) = self.current.clone() else { return };
+        let on = !self.radio.is_on(&chat);
+        let last = self.chats.get(&chat).map(|c| c.lines.last().map_or(0, |l| l.line.id));
+        self.radio.set(&chat, on, last);
+        if on {
+            self.contacts.radio.insert(chat);
+        } else {
+            self.contacts.radio.remove(&chat);
+        }
+        if let Err(e) = self.save_contacts() {
+            self.notice(&format!("Couldn't save radio mode: {e}"), true);
+        }
         self.render_current();
     }
 
@@ -842,6 +900,7 @@ impl App {
                 Err(e) => app.notice(&format!("Couldn't record: {e}"), true),
             });
         });
+        self.pump();
     }
 
     /// While recording or playing, update the time shown, and stop at the longest clip.
@@ -862,7 +921,8 @@ impl App {
                 if app.voice.playing.is_some() {
                     busy = true;
                     if app.voice.progress().is_none() {
-                        busy = app.voice.recording().is_some();
+                        app.pump();
+                        busy = app.voice.recording().is_some() || app.voice.playing.is_some();
                     }
                     app.render_current();
                 }

@@ -38,6 +38,8 @@ export struct LineItem {
     file-type: string,
     duration: string,
     playing: bool,
+    // A received voice clip not played yet.
+    unplayed: bool,
     progress: float,
     // First of a run of lines from the same sender: shows the name and avatar.
     first: bool,
@@ -84,6 +86,8 @@ export global AppState {
     in property <string> current-name;
     in property <bool> current-joined;
     in property <int> current-members;
+    // Received voice clips in the current group play by themselves.
+    in property <bool> current-radio;
     // The voucher code to hand a member, while joining the current group, in groups of eight
     // characters for reading; copying takes the code itself from the host.
     in property <string> code;
@@ -124,6 +128,7 @@ export global Actions {
     callback ptt-stop();
     callback ptt-cancel();
     callback toggle-voice(int);
+    callback toggle-radio();
     callback save-file(int);
     callback expand(int);
     callback copy-code();

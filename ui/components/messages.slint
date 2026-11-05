@@ -55,10 +55,23 @@ component VoicePill {
                     animate width { duration: Theme.settle; }
                 }
             }
-            Text {
-                text: root.line.duration;
-                color: root.meta;
-                font-size: Theme.fs-small;
+            HorizontalLayout {
+                spacing: Theme.s1;
+                alignment: start;
+                Text {
+                    text: root.line.duration;
+                    color: root.meta;
+                    font-size: Theme.fs-small;
+                }
+                if root.line.unplayed: Rectangle {
+                    y: (parent.height - self.height) / 2;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 4px;
+                    background: Theme.accent;
+                    accessible-role: text;
+                    accessible-label: "not played";
+                }
             }
         }
     }
