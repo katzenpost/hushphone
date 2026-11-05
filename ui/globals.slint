@@ -78,6 +78,8 @@ export global AppState {
     // The voucher code to hand a member, while joining the current group, in groups of eight
     // characters for reading; copying takes the code itself from the host.
     in property <string> code;
+    // The same code as a QR code, one pixel per module.
+    in property <image> code-qr;
     in property <bool> minting;
     // The group's latest notice while joining, such as a step that failed.
     in property <string> joining-note;

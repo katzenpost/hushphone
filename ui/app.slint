@@ -540,6 +540,19 @@ component VoucherCard inherits Card {
         }
         Hint { text: "Give this voucher code to someone already in the group, over a channel you trust. When they add it, you join. You can leave this page meanwhile."; }
         if AppState.joining-note != "": Hint { text: AppState.joining-note; color: Theme.warn; }
+        // Whole physical pixels per module, so that every module is sharp.
+        if AppState.code-qr.width > 0: HorizontalLayout {
+            alignment: center;
+            Image {
+                property <float> scale: max(1, floor(min(240px, lay.width - 2 * Theme.s5) / (AppState.code-qr.width * 1phx)));
+                source: AppState.code-qr;
+                image-rendering: pixelated;
+                width: self.scale * AppState.code-qr.width * 1phx;
+                height: self.width;
+                accessible-role: image;
+                accessible-label: "voucher code as a QR code";
+            }
+        }
         Rectangle { height: Theme.s2; }
         code := Text {
             text: AppState.code;

@@ -699,6 +699,7 @@ impl App {
         st.set_current_joined(v.joined);
         st.set_current_members(v.members.len() as i32);
         st.set_code(group_code(&v.code).into());
+        st.set_code_qr(qr_image(&v.code));
         st.set_minting(v.minting);
         st.set_joining_note(if v.joined { String::new() } else { model::joining_note(&c.lines) }.into());
         st.set_adding(v.adding);
@@ -805,6 +806,24 @@ fn group_code(code: &str) -> String {
         .join(" ")
 }
 
+/// The voucher code as a QR code, one pixel per module, dark on light with a quiet zone of four:
+/// byte mode, level M, the smallest version that fits, as the T-Deck shows it.
+fn qr_image(code: &str) -> slint::Image {
+    use qrcodegen::{QrCode, QrCodeEcc, QrSegment, Version};
+    let segs = [QrSegment::make_bytes(code.as_bytes())];
+    let Ok(qr) = QrCode::encode_segments_advanced(&segs, QrCodeEcc::Medium, Version::MIN, Version::MAX, None, false) else {
+        return slint::Image::default();
+    };
+    let n = qr.size() + 8;
+    let mut buf = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(n as u32, n as u32);
+    for (i, p) in buf.make_mut_slice().iter_mut().enumerate() {
+        let (x, y) = (i as i32 % n - 4, i as i32 / n - 4);
+        let v = if qr.get_module(x, y) { 0 } else { 255 };
+        *p = slint::Rgb8Pixel::new(v, v, v);
+    }
+    slint::Image::from_rgb8(buf)
+}
+
 /// Make `model` hold `new`, touching only the rows that changed.
 fn sync<T: Clone + PartialEq + 'static>(model: &VecModel<T>, new: Vec<T>) {
     let old = model.row_count();
@@ -830,6 +849,26 @@ mod tests {
     fn codes_are_grouped_for_reading() {
         assert_eq!(group_code("AQIDBAUGBwgJ"), "AQIDBAUG BwgJ");
         assert_eq!(group_code(""), "");
+    }
+
+    #[test]
+    fn qr_decodes_to_the_code() {
+        let code = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH0=";
+        let img = qr_image(code).to_rgb8().unwrap();
+        let n = img.width() as usize;
+        // 53 modules is version 9, the smallest that holds 168 bytes at level M; plus the quiet zone.
+        assert_eq!(n, 53 + 8);
+        let px = img.as_slice();
+        assert!(px[..4 * n].iter().all(|p| p.r == 255), "quiet zone");
+        let scale = 4;
+        let mut prep = rqrr::PreparedImage::prepare_from_greyscale(n * scale, n * scale, |x, y| px[y / scale * n + x / scale].r);
+        let grids = prep.detect_grids();
+        assert_eq!(grids.len(), 1);
+        let (meta, text) = grids[0].decode().unwrap();
+        assert_eq!(text, code);
+        assert_eq!(meta.version.0, 9);
+        assert_eq!(meta.ecc_level, 0); // M
+        assert!(qr_image("").size().width > 0);
     }
 
     #[test]
