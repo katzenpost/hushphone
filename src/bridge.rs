@@ -792,6 +792,9 @@ impl App {
             i.unplayed = !played.is_some_and(|p| p.contains(&(i.id as usize)));
         }
         st.set_current_radio(self.radio.is_on(&v.id));
+        let talker = self.talker(&v.id);
+        st.set_radio_receiving(talker.is_some());
+        st.set_radio_talker(talker.unwrap_or_default().into());
         st.set_current(v.id.clone().into());
         st.set_current_name(text::name(&v.name).into());
         st.set_current_joined(v.joined);
@@ -834,13 +837,24 @@ impl App {
         self.render_current();
     }
 
+    /// Who the clip playing is from, and from which group when it is not `current`.
+    fn talker(&self, current: &str) -> Option<String> {
+        let p = self.voice.playing.as_ref()?;
+        let c = self.chats.get(&p.chat)?;
+        let v = c.view.as_ref()?;
+        let l = c.lines.iter().find(|l| l.line.id == p.line)?;
+        let who = model::names(v, &self.contacts, &self.settings.name);
+        let from = who.get(&l.line.sender).map_or_else(|| text::name(&l.from), |w| w.shown.clone());
+        Some(if p.chat == current { from } else { format!("{from} in {}", text::name(&v.name)) })
+    }
+
     /// Radio mode: play the next clip queued, once nothing is playing or recording.
     fn pump(&mut self) {
         if self.voice.playing.is_some() || self.voice.recording().is_some() {
             return;
         }
         while self.voice.playing.is_none()
-            && let Some((chat, line)) = self.radio.next()
+            && let Some((chat, line)) = self.radio.pop()
         {
             self.play(&chat, line);
         }

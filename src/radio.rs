@@ -53,7 +53,7 @@ impl Radio {
         }
     }
 
-    pub fn next(&mut self) -> Option<(ChatId, usize)> {
+    pub fn pop(&mut self) -> Option<(ChatId, usize)> {
         self.queue.pop_front()
     }
 }
@@ -69,7 +69,7 @@ mod tests {
     }
 
     fn all(r: &mut Radio) -> Vec<(ChatId, usize)> {
-        std::iter::from_fn(|| r.next()).collect()
+        std::iter::from_fn(|| r.pop()).collect()
     }
 
     #[test]
@@ -105,7 +105,7 @@ mod tests {
         r.arrived("a", &[line(1, false, true)], |_| true);
         r.arrived("b", &[line(1, false, true)], |_| true);
         r.arrived("a", &[line(1, false, true), line(2, false, true)], |_| true);
-        assert_eq!(r.next(), Some(("a".into(), 1)));
+        assert_eq!(r.pop(), Some(("a".into(), 1)));
         r.set("a", false, None);
         assert_eq!(all(&mut r), vec![("b".into(), 1)], "turning off drops the group's queue");
     }

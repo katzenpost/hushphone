@@ -7,6 +7,10 @@
   screenshots.
 - **Talk** by holding the microphone button, or Space while it has focus; let go to send. Escape,
   or dragging away, cancels.
+- **Radio mode**, the radio button in a group's header, turns the group into a two-way radio:
+  voice messages received from then on play by themselves, one at a time in the order they
+  arrive, and you hold the big button to talk. A dot marks a voice message not yet played.
+  Pressing the button again returns to the chat.
 - **Files.** On Linux, hushphone touches one directory of yours, `~/hushphone`. To send a file,
   put it in `~/hushphone/send` first, then press the paperclip and pick it there. Save puts a
   received file in `~/hushphone/received`, never over another. On Android, the paperclip and

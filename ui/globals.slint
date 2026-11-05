@@ -88,6 +88,9 @@ export global AppState {
     in property <int> current-members;
     // Received voice clips in the current group play by themselves.
     in property <bool> current-radio;
+    // Radio mode: who the clip playing is from, and whether one is playing.
+    in property <string> radio-talker;
+    in property <bool> radio-receiving;
     // The voucher code to hand a member, while joining the current group, in groups of eight
     // characters for reading; copying takes the code itself from the host.
     in property <string> code;

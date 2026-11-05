@@ -279,3 +279,31 @@ fn text_names_the_transport_in_use() {
     st.set_mesh(true);
     assert_eq!(st.get_network(), "the Reticulum mesh");
 }
+
+#[test]
+fn radio_mode_trades_the_chat_for_a_radio_and_back() {
+    let ui = window();
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    let toggled = Rc::new(Cell::new(0));
+    let t = toggled.clone();
+    ui.global::<Actions>().on_toggle_radio(move || t.set(t.get() + 1));
+    let composer = |ui: &AppWindow| {
+        let _ = button(ui, "More for friends");
+        ElementHandle::find_by_accessible_label(ui, "Attach a file for friends").count()
+    };
+    assert_eq!(composer(&ui), 1);
+    mock_elapsed_time(Duration::from_millis(600));
+    button(&ui, "Radio off: voice messages wait to be played").invoke_accessible_default_action();
+    assert_eq!(toggled.get(), 1);
+    st.set_current_radio(true);
+    st.set_radio_receiving(true);
+    st.set_radio_talker("carol".into());
+    assert_eq!(composer(&ui), 0);
+    assert_eq!(ElementHandle::find_by_accessible_label(&ui, "Channel friends: carol talking").count(), 1);
+    let _ = button(&ui, "Hold to record a voice message");
+    st.set_current_radio(false);
+    assert_eq!(composer(&ui), 1);
+}
