@@ -20,17 +20,17 @@ git clone https://github.com/katzenpost/hushphone && cd hushphone
 cargo run --release -- --transport reticulum --replica 162.220.11.225:4242
 ```
 
-On the mixnet instead, start `kpclientd` and run `cargo run --release`
+On the mixnet instead, start a `kpclientd` (from katzenpost; the mesh needs none) and run `cargo run --release`
 (see [docs/building.md](docs/building.md)).
 
-On Android, install the kpclientd-android and hushphone APKs from their releases
+On Android, install the [kpclientd-android](https://github.com/katzenpost/kpclientd-android) and hushphone APKs from their releases
 (see [docs/android.md](docs/android.md)).
 
 ## Transports
 
-- `mixnet` (default): the Katzenpost mixnet, through kpclientd.
-- `reticulum`: a Reticulum mesh, in pure Rust (Reticulum-rs). Needs nothing else installed.
-- `reticulum-py`: the same mesh through the Python RNS, embedded in the Rust binary with PyO3. Build with `--features reticulum-py`.
+- `mixnet` (default): the Katzenpost mixnet, Needs a running kpclientd (desktop: from katzenpost; Android: [kpclientd-android](https://github.com/katzenpost/kpclientd-android)).
+- `reticulum`: a Reticulum mesh, in pure Rust (Reticulum-rs). Needs nothing else installed, no kpclientd.
+- `reticulum-py`: the same mesh through the Python RNS, embedded in the Rust binary with PyO3. Build with `--features reticulum-py`. No kpclientd.
 
 ## Links
 
