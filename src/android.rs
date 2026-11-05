@@ -147,8 +147,16 @@ pub fn paste_text() -> Result<String, String> {
     })
 }
 
-/// The picker's answer, for the thread that opened it; see android/FilePicker.java.
+/// The answer of the activity the app opened, for the thread that opened it; see
+/// android/FilePicker.java and android/QrScanner.java.
 static PICK: Mutex<Option<mpsc::Sender<Option<String>>>> = Mutex::new(None);
+
+fn answer(env: &mut jni::JNIEnv, text: &jni::objects::JString) {
+    let text = if text.is_null() { None } else { env.get_string(text).ok().map(String::from) };
+    if let Some(tx) = PICK.lock().unwrap().take() {
+        let _ = tx.send(text);
+    }
+}
 
 /// Called by FilePicker with the document's URI, or null if the user went back.
 #[unsafe(no_mangle)]
@@ -157,16 +165,47 @@ pub extern "system" fn Java_network_katzenpost_hushphone_FilePicker_nativeOnResu
     _this: JObject<'_>,
     uri: jni::objects::JString<'_>,
 ) {
-    let uri = if uri.is_null() { None } else { env.get_string(&uri).ok().map(String::from) };
-    if let Some(tx) = PICK.lock().unwrap().take() {
-        let _ = tx.send(uri);
+    answer(&mut env, &uri);
+}
+
+/// Called by QrScanner with the text of the QR code it saw, or null if the user went back.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_network_katzenpost_hushphone_QrScanner_nativeOnResult(
+    mut env: jni::JNIEnv<'_>,
+    _this: JObject<'_>,
+    text: jni::objects::JString<'_>,
+) {
+    answer(&mut env, &text);
+}
+
+/// Called by QrScanner with a camera frame's luma plane: the text of the QR code in it, or null.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_network_katzenpost_hushphone_QrScanner_nativeDecode<'a>(
+    env: jni::JNIEnv<'a>,
+    _this: JObject<'a>,
+    plane: jni::objects::JByteBuffer<'a>,
+    width: jni::sys::jint,
+    height: jni::sys::jint,
+    stride: jni::sys::jint,
+) -> jni::sys::jstring {
+    let (w, h, stride) = (width.max(0) as usize, height.max(0) as usize, stride.max(0) as usize);
+    let (Ok(ptr), Ok(len)) = (env.get_direct_buffer_address(&plane), env.get_direct_buffer_capacity(&plane)) else {
+        return std::ptr::null_mut();
+    };
+    if h == 0 || stride < w || len < stride * (h - 1) + w {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: the plane's direct buffer, of `len` bytes, stays valid until the call returns.
+    let y = unsafe { std::slice::from_raw_parts(ptr, len) };
+    match crate::qr::decode(w, h, |px, py| y[py * stride + px]) {
+        Some(text) => env.new_string(text).map(|s| s.into_raw()).unwrap_or(std::ptr::null_mut()),
+        None => std::ptr::null_mut(),
     }
 }
 
-/// Open the system's document picker through FilePicker, and wait for its answer: the
-/// document's URI, or none if the user went back. `mode` is "open" or "create", `name` the name
-/// to suggest.
-fn pick(mode: &str, name: &str) -> Result<Option<String>, String> {
+/// Open the app's activity `class` with the string `extras`, and wait for its answer: a
+/// document's URI, a QR code's text, or none if the user went back.
+fn pick(class: &str, extras: &[(&str, &str)]) -> Result<Option<String>, String> {
     let (tx, rx) = mpsc::channel();
     {
         let mut p = PICK.lock().unwrap();
@@ -179,14 +218,14 @@ fn pick(mode: &str, name: &str) -> Result<Option<String>, String> {
         let intent = env.new_object("android/content/Intent", "()V", &[])?;
         // By name, rather than through FindClass, which cannot see the app's classes from a
         // native thread.
-        let class = env.new_string("network.katzenpost.hushphone.FilePicker")?;
+        let class = env.new_string(class)?;
         env.call_method(
             &intent,
             "setClassName",
             "(Landroid/content/Context;Ljava/lang/String;)Landroid/content/Intent;",
             &[JValue::Object(activity), JValue::Object(&class)],
         )?;
-        for (k, v) in [("mode", mode), ("name", name)] {
+        for &(k, v) in extras {
             let (k, v) = (env.new_string(k)?, env.new_string(v)?);
             env.call_method(
                 &intent,
@@ -200,9 +239,18 @@ fn pick(mode: &str, name: &str) -> Result<Option<String>, String> {
     });
     if let Err(e) = started {
         PICK.lock().unwrap().take();
-        return Err(format!("couldn't open the picker: {e}"));
+        return Err(format!("couldn't open {class}: {e}"));
     }
     rx.recv().map_err(|_| "the picker gave no answer".to_string())
+}
+
+const FILE_PICKER: &str = "network.katzenpost.hushphone.FilePicker";
+
+/// The text of a QR code the camera sees, or none if the user went back. Only ever called for
+/// the user pressing Scan; the camera permission is asked for then.
+pub fn scan_code(_: &UserIntent) -> Result<Option<String>, String> {
+    let secure = if cfg!(feature = "test-screenshots") { "0" } else { "1" };
+    pick("network.katzenpost.hushphone.QrScanner", &[("secure", secure)])
 }
 
 /// The document at `uri`, opened through the content resolver in `mode` ("r" or "wt"), as a
@@ -268,7 +316,7 @@ fn display_name(env: &mut jni::JNIEnv, activity: &JObject, uri: &JObject) -> jni
 /// ever called for the user pressing Attach.
 pub fn pick_document(_: &UserIntent) -> Result<Option<Picked>, String> {
     use std::io::Read;
-    let Some(uri) = pick("open", "")? else { return Ok(None) };
+    let Some(uri) = pick(FILE_PICKER, &[("mode", "open")])? else { return Ok(None) };
     let (name, fd) = with_activity(|env, activity| {
         let u = parse_uri(env, &uri)?;
         let name = display_name(env, activity, &u)?;
@@ -287,7 +335,7 @@ pub fn pick_document(_: &UserIntent) -> Result<Option<Picked>, String> {
 /// back. Only ever called for the user pressing Save.
 pub fn create_document(_: &UserIntent, name: &str, bytes: &[u8]) -> Result<bool, String> {
     use std::io::Write;
-    let Some(uri) = pick("create", &crate::effects::file_name(name))? else { return Ok(false) };
+    let Some(uri) = pick(FILE_PICKER, &[("mode", "create"), ("name", &crate::effects::file_name(name))])? else { return Ok(false) };
     let fd = with_activity(|env, activity| {
         let u = parse_uri(env, &uri)?;
         open_document(env, activity, &u, "wt")

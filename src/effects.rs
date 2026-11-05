@@ -150,6 +150,30 @@ mod imp {
         let mut c = arboard::Clipboard::new().map_err(|e| e.to_string())?;
         c.get_text().map_err(|e| e.to_string())
     }
+
+    /// The text of the QR code in the image on the clipboard, a screenshot say; or else in the
+    /// newest picture in `dir/send` that holds one.
+    pub fn scan_code(intent: &UserIntent, dir: &Path) -> Result<Option<String>, String> {
+        if let Ok(img) = arboard::Clipboard::new().and_then(|mut c| c.get_image()) {
+            return crate::qr::decode_rgba(img.width, img.height, &img.bytes)
+                .map(Some)
+                .ok_or_else(|| "The image on the clipboard holds no QR code.".into());
+        }
+        let send = dir.join(SEND);
+        let mut pictures: Vec<_> = list_files(intent, dir)?
+            .into_iter()
+            .filter(|e| e.size <= FILE_MAX && [".png", ".jpg", ".jpeg"].iter().any(|x| e.name.to_lowercase().ends_with(x)))
+            .filter_map(|e| Some((std::fs::metadata(send.join(&e.name)).ok()?.modified().ok()?, e.name)))
+            .collect();
+        pictures.sort();
+        for (_, name) in pictures.iter().rev() {
+            let Some(img) = slint::Image::load_from_path(&send.join(name)).ok().and_then(|i| i.to_rgba8()) else { continue };
+            if let Some(text) = crate::qr::decode_rgba(img.width() as usize, img.height() as usize, img.as_bytes()) {
+                return Ok(Some(text));
+            }
+        }
+        Err(format!("No QR code found: copy a screenshot of it, or put a picture of it in {}.", send.display()))
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -162,6 +186,11 @@ mod imp {
 
     pub fn paste_text(_: &UserIntent) -> Result<String, String> {
         crate::android::paste_text()
+    }
+
+    /// The text of a QR code the camera sees, or none if the user went back.
+    pub fn scan_code(intent: &UserIntent, _: &Path) -> Result<Option<String>, String> {
+        crate::android::scan_code(intent)
     }
 }
 

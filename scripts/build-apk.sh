@@ -1,8 +1,8 @@
 #!/bin/sh
 # build-apk.sh ABI TARGET OUT.apk: build the app's library for TARGET with cargo-ndk, compile
-# the picker activity, link the manifest, and put them together as a signed APK at OUT. The
-# keystore is $HUSHPHONE_KEYSTORE with its password in $HUSHPHONE_KEYSTORE_PASSWORD; without
-# one, the debug keystore in ~/.android is used, made if need be.
+# the picker and scanner activities, link the manifest, and put them together as a signed APK at
+# OUT. The keystore is $HUSHPHONE_KEYSTORE with its password in $HUSHPHONE_KEYSTORE_PASSWORD;
+# without one, the debug keystore in ~/.android is used, made if need be.
 #
 # The same commit gives the same APK but for its signature: the tools are pinned, entries are
 # added in a fixed order, and their times are $SOURCE_DATE_EPOCH.
@@ -30,7 +30,7 @@ mkdir -p "$work/classes" "$work/lib/$abi"
 cargo ndk -t "$abi" -P "${ANDROID_PLATFORM:-36}" build --release --lib --locked ${FEATURES:+--features $FEATURES}
 cp "target/$target/release/libhushphone.so" "$work/lib/$abi/"
 
-javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$jar" -d "$work/classes" android/FilePicker.java
+javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$jar" -d "$work/classes" android/*.java
 "$tools/d8" --release --min-api 28 --lib "$jar" --output "$work" "$work"/classes/network/katzenpost/hushphone/*.class
 
 "$tools/aapt2" link --manifest packaging/android/AndroidManifest.xml -I "$jar" \

@@ -349,6 +349,9 @@ fn wire(ui: &AppWindow) {
             .unwrap_or_default()
             .into()
     });
+    a.on_scan_code(|| {
+        with_app(|app| app.scan_code(UserIntent::new()));
+    });
     a.on_open_attach(|| {
         with_app(|app| app.open_attach(UserIntent::new()));
     });
@@ -576,6 +579,20 @@ impl App {
                     }
                 }
                 Err(e) => app.notice(&format!("Couldn't read {}: {e}", dir.join(effects::SEND).display()), true),
+            });
+        });
+    }
+
+    /// Read a voucher code from a QR code, off this thread, into the field a pasted one goes in.
+    fn scan_code(&mut self, intent: UserIntent) {
+        self.state(|s| s.set_scanned_code("".into()));
+        let dir = self.setup.files_dir.clone();
+        self.effects.spawn(async move {
+            let r = tokio::task::spawn_blocking(move || effects::scan_code(&intent, &dir)).await.unwrap_or_else(|e| Err(e.to_string()));
+            later(move |app| match r {
+                Ok(Some(code)) => app.state(|s| s.set_scanned_code(code.into())),
+                Ok(None) => {}
+                Err(e) => app.notice(&e, true),
             });
         });
     }

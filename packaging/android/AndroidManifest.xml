@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- The Reticulum mesh: one TCP link to a replica. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Asked for when the user first scans a voucher's QR code. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- kpclientd-android's connect provider, the only way this app reaches the mixnet. -->
     <queries>
@@ -38,6 +41,14 @@
         <activity
             android:name="network.katzenpost.hushphone.FilePicker"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Reads a voucher's QR code with the camera; see android/QrScanner.java. -->
+        <activity
+            android:name="network.katzenpost.hushphone.QrScanner"
+            android:configChanges="orientation|screenSize|keyboardHidden|keyboard|navigation|uiMode"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:excludeFromRecents="true"
             android:exported="false" />
     </application>
