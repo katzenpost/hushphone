@@ -60,7 +60,7 @@ whatever other members send is untrusted.
     cache; it is wiped the next time and when hushphone starts.
   - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
     copy is written over and removed, but flash storage may still hold its old blocks.
-- **On disk.** Settings (your name, the daemon's address, the theme, the wire version) are written with mode 0600
+- **On disk.** Settings (your name, the daemon's address, the theme, the wire version, and on Android the transport and replica) are written with mode 0600
   and are not sealed. The names you give members, with their keys, and what you have read are a
   contact list, so they are kept with the state, sealed when it is. A file you save is written
   out plain in `~/hushphone/received`, since that is what saving is for. Logs hold no message
@@ -85,9 +85,10 @@ whatever other members send is untrusted.
     names in its comment to `/etc/apparmor.d/local/hushphone`.
   - **If the filter cannot be applied,** hushphone does not connect; it says so, and
     `HUSHPHONE_SANDBOX=off` is the way to run without the filter on purpose.
-  - **Android.** hushphone gets its connections to kpclientd from kpclientd-android, as unix
-    sockets, so the unix-only filter applies there too, on top of Android's own SELinux and
-    seccomp sandbox. The app does not even ask for the internet permission.
+  - **Android.** On the mixnet, hushphone gets its connections to kpclientd from
+    kpclientd-android, as unix sockets, so the unix-only filter applies there too, on top of
+    Android's own SELinux and seccomp sandbox. The internet permission is there for the mesh,
+    which gets the TCP filter.
 
 ## Unsafe code
 
@@ -102,10 +103,10 @@ Safe Rust can't make system calls, cross the Java boundary, or manage memory pag
 
    These are plain libc calls with constant arguments, and the standard library has no safe wrapper for any of them.
 2. **`src/android.rs:26`.** `#[unsafe(no_mangle)]` on `android_main`, so that android-activity finds the entry point by its symbol name. The attribute is unsafe because an exported name could clash with another symbol, and this one is unique to the app.
-3. **`src/android.rs:59`.** `JavaVM::from_raw` wraps the pointer to the Java VM that android-activity hands over. JNI is a C interface, so wrapping its raw pointer can't be checked. The VM outlives the app.
-4. **`src/android.rs:61`.** `JObject::from_raw` wraps the activity's global reference, also from android-activity. It's needed for the Keystore, permission requests, the document picker and binding to kpclientd-android, and it stays valid while the activity lives.
-5. **`src/android.rs:141`.** `#[unsafe(no_mangle)]` on `Java_network_katzenpost_hushphone_FilePicker_nativeOnResult`, the method the picker activity in `android/FilePicker.java` calls with the document the user chose. JNI finds it by this name. It only hands the string on to the thread waiting for it.
-6. **`src/android.rs:215` and `:368`.** `OwnedFd::from_raw_fd` takes over a descriptor from Java: the document the user picked, opened by the content resolver, and the socket kpclientd-android hands back. `ParcelFileDescriptor.detachFd` gives up ownership on the Java side first, so each descriptor has exactly one owner, which closes it on drop.
+3. **`src/android.rs:72`.** `JavaVM::from_raw` wraps the pointer to the Java VM that android-activity hands over. JNI is a C interface, so wrapping its raw pointer can't be checked. The VM outlives the app.
+4. **`src/android.rs:74`.** `JObject::from_raw` wraps the activity's global reference, also from android-activity. It's needed for the Keystore, permission requests, the document picker and binding to kpclientd-android, and it stays valid while the activity lives.
+5. **`src/android.rs:154`.** `#[unsafe(no_mangle)]` on `Java_network_katzenpost_hushphone_FilePicker_nativeOnResult`, the method the picker activity in `android/FilePicker.java` calls with the document the user chose. JNI finds it by this name. It only hands the string on to the thread waiting for it.
+6. **`src/android.rs:228` and `:381`.** `OwnedFd::from_raw_fd` takes over a descriptor from Java: the document the user picked, opened by the content resolver, and the socket kpclientd-android hands back. `ParcelFileDescriptor.detachFd` gives up ownership on the Java side first, so each descriptor has exactly one owner, which closes it on drop.
 7. **`tests/sandbox.rs:70`** (test only). `prctl(PR_GET_DUMPABLE)` and `getrlimit(RLIMIT_CORE)` check that item 1 took effect.
 
 ### pigeonhole_protocols: `Secret` (`rust/src/secret/mod.rs`)
@@ -214,7 +215,7 @@ Memory protection does nothing for a user who is misled into the wrong action. K
 
 Each number below is Yee's. Only the guidelines hushphone has a clear answer to are listed.
 
-- **1. Least authority on the easiest path.** The sandbox applies without any setup. On Linux, hushphone gets the daemon's socket, the display and the sound server, no IP, the keyring on the session bus and nothing else there, and of the user's files only `~/hushphone/send` to read and `~/hushphone/received` to write. On Android, it doesn't ask for the internet or storage permissions, kpclientd-android hands it connected sockets, and the document picker hands it one file at a time.
+- **1. Least authority on the easiest path.** The sandbox applies without any setup. On Linux, hushphone gets the daemon's socket, the display and the sound server, no IP, the keyring on the session bus and nothing else there, and of the user's files only `~/hushphone/send` to read and `~/hushphone/received` to write. On Android, it doesn't ask for the storage permissions; on the mixnet kpclientd-android hands it connected sockets, and the internet permission is used only for the mesh's one TCP link to a replica; and the document picker hands it one file at a time.
 - **2. Authority follows consent.** See `UserIntent` above. Received files are never saved on their own, and joining a group takes a voucher code that the user passes on, and that a member adds by hand.
 - **3. Authority can be taken back.** In kpclientd-android, **Forget** withdraws an app's access and ends its connections at once.
 - **4. Awareness of others' authority.** The recording indicator shows for exactly as long as the microphone is open, and kpclientd-android's **Apps** list shows every app the user has answered about.

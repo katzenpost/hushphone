@@ -1001,6 +1001,8 @@ component AttachDialog inherits Dialog {
 
 component SettingsDialog inherits Dialog {
     in-out property <string> daemon: AppState.daemon;
+    in-out property <bool> use-mesh: AppState.use-mesh;
+    in-out property <string> replica: AppState.replica;
     panel-width: 460px;
     GridLayout {
         spacing: Theme.s3;
@@ -1014,9 +1016,21 @@ component SettingsDialog inherits Dialog {
                 overflow: elide;
             }
         }
-        Row {
+        if !AppState.choose-transport: Row {
             FieldLabel { text: "kpclientd"; vertical-alignment: center; }
             LineEdit { text <=> root.daemon; placeholder-text: "@katzenpost or 127.0.0.1:64331"; }
+        }
+        if AppState.choose-transport: Row {
+            FieldLabel { text: "Transport"; vertical-alignment: center; }
+            ComboBox {
+                model: ["Mixnet", "Reticulum mesh"];
+                current-index: root.use-mesh ? 1 : 0;
+                selected(v) => { root.use-mesh = self.current-index == 1; }
+            }
+        }
+        if AppState.choose-transport && root.use-mesh: Row {
+            FieldLabel { text: "Replica"; vertical-alignment: center; }
+            LineEdit { text <=> root.replica; placeholder-text: "162.220.11.225:4242"; }
         }
         Row {
             FieldLabel { text: "Theme"; vertical-alignment: center; }
@@ -1029,7 +1043,8 @@ component SettingsDialog inherits Dialog {
             }
         }
     }
-    Hint { text: "Members see the name you chose when hushphone first started. A new daemon address is used the next time hushphone starts; a host:port address carries every key and message to that host unprotected, so use one only on this machine. Press F10 to hide the window's contents at once."; }
+    if AppState.choose-transport: Hint { text: "Members see the name you chose when hushphone first started. A new transport or replica is used the next time hushphone starts. Press F10 to hide the window's contents at once."; }
+    if !AppState.choose-transport: Hint { text: "Members see the name you chose when hushphone first started. A new daemon address is used the next time hushphone starts; a host:port address carries every key and message to that host unprotected, so use one only on this machine. Press F10 to hide the window's contents at once."; }
     if AppState.files-dir != "": Hint { text: "Files to send go in " + AppState.files-dir + "/send; files you save land in " + AppState.files-dir + "/received. hushphone reads and writes no other files of yours."; }
     HorizontalLayout {
         alignment: end;
@@ -1039,7 +1054,7 @@ component SettingsDialog inherits Dialog {
             text: "Save";
             primary: true;
             activated => {
-                Actions.save-settings(root.daemon);
+                Actions.save-settings(root.daemon, root.use-mesh, root.replica);
                 root.dismissed();
             }
         }

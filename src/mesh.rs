@@ -2,6 +2,11 @@
 
 use std::path::{Path, PathBuf};
 
+/// namenlos's bridge replica, shared by the mesh and the mixnet.
+pub const BRIDGE: &str = "162.220.11.225:4242";
+/// namenlos's box plaintext size.
+pub const BOX_SIZE: usize = 1549;
+
 /// Writes the Reticulum config for one TCP link to `replica` (`host:port`) under `data_dir` and
 /// returns its directory. Written on every start, so a changed address takes effect; the identity
 /// and storage beside it stay. Same layout as katzenrns's `--replica`.
