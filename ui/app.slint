@@ -814,6 +814,10 @@ component NameDialog inherits Dialog {
     in property <string> hint;
     in property <string> action;
     in-out property <string> value;
+    // Offers to scan a QR code, whose text then fills the field.
+    in property <bool> scannable;
+    in property <string> scanned: AppState.scanned-code;
+    changed scanned => { if (root.scanned != "") { root.value = root.scanned; } }
     callback submitted(string);
     VerticalLayout {
         spacing: Theme.s2;
@@ -827,6 +831,7 @@ component NameDialog inherits Dialog {
     HorizontalLayout {
         alignment: end;
         spacing: Theme.s2;
+        if root.scannable: Button { text: "Scan QR"; activated => { Actions.scan-code(); } }
         if root.closable: Button { text: "Cancel"; activated => { root.dismissed(); } }
         Button {
             text: root.action;
@@ -1229,8 +1234,9 @@ export component AppWindow inherits Window {
             if root.overlay == Overlay.invite: NameDialog {
                 title: "Add a member to " + AppState.current-name;
                 label: "Their voucher code";
-                hint: "Paste the code the newcomer gave you. They will see the group's members and its messages from now on.";
+                hint: "Paste the code the newcomer gave you, or scan its QR code. They will see the group's members and its messages from now on.";
                 action: "Add member";
+                scannable: true;
                 dismissed => { root.overlay = Overlay.none; }
                 submitted(v) => {
                     Actions.invite(v);
