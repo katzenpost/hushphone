@@ -20,7 +20,9 @@ export SOURCE_DATE_EPOCH
 
 version=${VERSION:-$(git describe --tags --always)}
 crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-code=$(echo "$crate" | awk -F. '{ print $1 * 10000 + $2 * 100 + $3 }')
+# Above v0.1.3's 16777475, and one per ABI so arm64-v8a < x86_64.
+case $abi in arm64-v8a) n=1 ;; x86_64) n=2 ;; *) echo "no version code for $abi" >&2; exit 2 ;; esac
+code=$(echo "$crate" | awk -F. -v n="$n" '{ print 100000000 + ($1 * 10000 + $2 * 100 + $3) * 10 + n }')
 
 work=target/apk/$abi
 rm -rf "$work"
@@ -33,7 +35,8 @@ cp "target/$target/release/libhushphone.so" "$work/lib/$abi/"
 javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$jar" -d "$work/classes" android/*.java
 "$tools/d8" --release --min-api 28 --lib "$jar" --output "$work" "$work"/classes/network/katzenpost/hushphone/*.class
 
-"$tools/aapt2" link --manifest packaging/android/AndroidManifest.xml -I "$jar" \
+"$tools/aapt2" compile --dir packaging/android/res -o "$work/res.zip"
+"$tools/aapt2" link --manifest packaging/android/AndroidManifest.xml -I "$jar" "$work/res.zip" \
     --version-code "$code" --version-name "$version" -o "$work/base.apk"
 
 cd "$work"
@@ -43,7 +46,7 @@ zip -q -X -D unaligned.apk classes.dex "lib/$abi/libhushphone.so"
 "$tools/zipalign" -f 4 unaligned.apk aligned.apk
 
 if [ -n "${HUSHPHONE_KEYSTORE:-}" ]; then
-    "$tools/apksigner" sign --ks "$HUSHPHONE_KEYSTORE" --ks-pass env:HUSHPHONE_KEYSTORE_PASSWORD --out "$out" aligned.apk
+    "$tools/apksigner" sign --alignment-preserved --ks "$HUSHPHONE_KEYSTORE" --ks-pass env:HUSHPHONE_KEYSTORE_PASSWORD --out "$out" aligned.apk
 else
     debug=$HOME/.android/debug.keystore
     if [ ! -f "$debug" ]; then
@@ -51,6 +54,6 @@ else
         keytool -genkeypair -keystore "$debug" -storepass android -keypass android -alias androiddebugkey \
             -keyalg RSA -keysize 2048 -validity 10000 -dname CN=Android\ Debug,O=Android,C=US
     fi
-    "$tools/apksigner" sign --ks "$debug" --ks-pass pass:android --out "$out" aligned.apk
+    "$tools/apksigner" sign --alignment-preserved --ks "$debug" --ks-pass pass:android --out "$out" aligned.apk
 fi
 echo "$out"
