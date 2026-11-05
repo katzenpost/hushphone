@@ -107,31 +107,32 @@ Safe Rust can't make system calls, cross the Java boundary, or manage memory pag
 4. **`src/android.rs:74`.** `JObject::from_raw` wraps the activity's global reference, also from android-activity. It's needed for the Keystore, permission requests, the document picker and binding to kpclientd-android, and it stays valid while the activity lives.
 5. **`src/android.rs:162`, `:172` and `:182`.** `#[unsafe(no_mangle)]` on `Java_network_katzenpost_hushphone_FilePicker_nativeOnResult` and `Java_network_katzenpost_hushphone_QrScanner_nativeOnResult`, the methods the picker activity in `android/FilePicker.java` and the scanner in `android/QrScanner.java` call with the document the user chose or the QR code's text, and on `Java_network_katzenpost_hushphone_QrScanner_nativeDecode`, which the scanner calls with each camera frame. JNI finds them by these names. The first two only hand the string on to the thread waiting for it. At `:199`, `slice::from_raw_parts` lends the frame's direct buffer, at the address and length JNI reports for it, to the QR decoder for the length of the call; the frame's width, height and row stride are checked against that length first.
 6. **`src/android.rs:276` and `:429`.** `OwnedFd::from_raw_fd` takes over a descriptor from Java: the document the user picked, opened by the content resolver, and the socket kpclientd-android hands back. `ParcelFileDescriptor.detachFd` gives up ownership on the Java side first, so each descriptor has exactly one owner, which closes it on drop.
-7. **`tests/sandbox.rs:70`** (test only). `prctl(PR_GET_DUMPABLE)` and `getrlimit(RLIMIT_CORE)` check that item 1 took effect.
+7. **`src/webcam.rs`** (Linux). Reading the webcam through V4L2, which has no safe binding in the standard library: `ioctl` (`:107`) on the device's own structures, each of the size its request encodes and laid out as `linux/videodev2.h` has them, which compile-time assertions check; `mem::zeroed` (`:101`) only for those structures of integers; the capture format the driver filled in, read out of its union (`:154`); `mmap` (`:173`) of each buffer at the offset and length the driver gives, unmapped once in `Drop` (`:223`); `poll` (`:200`) on the device; and `slice::from_raw_parts` (`:210`), which lends a filled buffer to the brightness copy, within its mapped length, before the buffer is queued back to the driver.
+8. **`tests/sandbox.rs:70`** (test only). `prctl(PR_GET_DUMPABLE)` and `getrlimit(RLIMIT_CORE)` check that item 1 took effect.
 
 ### pigeonhole_protocols: `Secret` (`rust/src/secret/mod.rs`)
 
 All of these are inside `Secret`, the type that holds every key and capability (see below).
 
-8. **Line 24–25.** `unsafe impl Send` and `Sync`. A raw pointer is neither by default. The guarded memory belongs to the `Secret` alone and is never written after it's made, so sharing or moving it between threads is sound.
-9. **Line 31.** `memsec::malloc_sized`: allocates the guarded memory.
-10. **Line 33.** `NonNull::as_mut`: copies the secret in. The memory is exactly `bytes.len()` bytes and no one else holds it.
-11. **Line 52.** `NonNull::as_ref`: lends the bytes out as `&[u8]`. The borrow can't outlive the `Secret`, so it can't outlive the memory either.
-12. **Line 69.** `memsec::free`: wipes the memory and unmaps it, once, in `Drop`. It aborts if the canary in front of the data was overwritten.
-13. **Line 91.** `memsec::memeq`: compares two secrets of equal length in constant time.
+9. **Line 24–25.** `unsafe impl Send` and `Sync`. A raw pointer is neither by default. The guarded memory belongs to the `Secret` alone and is never written after it's made, so sharing or moving it between threads is sound.
+10. **Line 31.** `memsec::malloc_sized`: allocates the guarded memory.
+11. **Line 33.** `NonNull::as_mut`: copies the secret in. The memory is exactly `bytes.len()` bytes and no one else holds it.
+12. **Line 52.** `NonNull::as_ref`: lends the bytes out as `&[u8]`. The borrow can't outlive the `Secret`, so it can't outlive the memory either.
+13. **Line 69.** `memsec::free`: wipes the memory and unmaps it, once, in `Drop`. It aborts if the canary in front of the data was overwritten.
+14. **Line 91.** `memsec::memeq`: compares two secrets of equal length in constant time.
 
 ### rustic_audio: `SecureVec` (`src/secure.rs`)
 
 All of these are inside `SecureVec`, a growable vector in guarded memory. It holds voice samples and encoded clips.
 
-14. **Line 22–23.** `unsafe impl Send` and `Sync`, for `T` that is itself `Send` or `Sync`. The memory belongs to the vector alone. Recording fills it on the audio thread, and it is then handed to the caller.
-15. **Line 31.** `memsec::malloc_sized` for `cap` values. memsec ends the allocation on a page boundary and the byte count is a multiple of `T`'s size, so the start is aligned for `T`. A debug assertion checks this.
-16. **Line 42** (Android only). `sysconf` and `madvise(MADV_DONTDUMP)`. memsec leaves pages out of core dumps on Linux but not on Android, so this does it there.
-17. **Line 61.** `memsec::free`: wipes and unmaps, with the same pointer and size it was allocated with. It's called on drop, and when the vector grows into a new allocation.
-18. **Line 109.** `ptr::copy_nonoverlapping`: moves the values into the larger allocation when the vector grows. The two allocations are distinct, and both hold `len` values.
-19. **Line 117.** `slice::from_raw_parts`: reads out the `len` values when guarded memory is refused and the vector falls back to the heap.
-20. **Line 139.** `ptr::copy_nonoverlapping`: appends after the `len` values, into room just made by `reserve`.
-21. **Line 165 and 175.** `slice::from_raw_parts` and `from_raw_parts_mut`: lend out exactly the `len` initialised values, borrowed as the vector is.
+15. **Line 22–23.** `unsafe impl Send` and `Sync`, for `T` that is itself `Send` or `Sync`. The memory belongs to the vector alone. Recording fills it on the audio thread, and it is then handed to the caller.
+16. **Line 31.** `memsec::malloc_sized` for `cap` values. memsec ends the allocation on a page boundary and the byte count is a multiple of `T`'s size, so the start is aligned for `T`. A debug assertion checks this.
+17. **Line 42** (Android only). `sysconf` and `madvise(MADV_DONTDUMP)`. memsec leaves pages out of core dumps on Linux but not on Android, so this does it there.
+18. **Line 61.** `memsec::free`: wipes and unmaps, with the same pointer and size it was allocated with. It's called on drop, and when the vector grows into a new allocation.
+19. **Line 109.** `ptr::copy_nonoverlapping`: moves the values into the larger allocation when the vector grows. The two allocations are distinct, and both hold `len` values.
+20. **Line 117.** `slice::from_raw_parts`: reads out the `len` values when guarded memory is refused and the vector falls back to the heap.
+21. **Line 139.** `ptr::copy_nonoverlapping`: appends after the `len` values, into room just made by `reserve`.
+22. **Line 165 and 175.** `slice::from_raw_parts` and `from_raw_parts_mut`: lend out exactly the `len` initialised values, borrowed as the vector is.
 
 ### Why memsec needs unsafe
 
@@ -155,7 +156,7 @@ Two tools are used, for two different jobs.
 - places an inaccessible guard page before and after it, so that overrunning a neighbouring buffer faults instead of reading the secret;
 - puts a random canary in front of the data and checks it on free, aborting if it changed;
 - `mlock`s it, so it isn't written to swap;
-- marks it `MADV_DONTDUMP`, so it stays out of core dumps (on Android, `SecureVec` does this itself; see item 15);
+- marks it `MADV_DONTDUMP`, so it stays out of core dumps (on Android, `SecureVec` does this itself; see item 17);
 - wipes it before unmapping.
 
 If the system refuses guarded memory (for example, when the `mlock` limit is reached), both types fall back to the ordinary heap and still wipe on drop. `is_guarded()` reports which happened.

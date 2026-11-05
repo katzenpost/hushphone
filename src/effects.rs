@@ -8,6 +8,7 @@
 //! system's document picker hands over one file at a time, to read or to write.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 use zeroize::Zeroizing;
 
@@ -18,6 +19,9 @@ pub struct Picked {
     pub name: String,
     pub bytes: Zeroizing<Vec<u8>>,
 }
+
+/// A webcam's frame, to show while scanning.
+pub type Preview = slint::SharedPixelBuffer<slint::Rgb8Pixel>;
 
 /// A file in the send directory, for the user to pick from.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -151,14 +155,25 @@ mod imp {
         c.get_text().map_err(|e| e.to_string())
     }
 
-    /// The text of the QR code in the image on the clipboard, a screenshot say; or else in the
-    /// newest picture in `dir/send` that holds one.
-    pub fn scan_code(intent: &UserIntent, dir: &Path) -> Result<Option<String>, String> {
-        if let Ok(img) = arboard::Clipboard::new().and_then(|mut c| c.get_image()) {
-            return crate::qr::decode_rgba(img.width, img.height, &img.bytes)
-                .map(Some)
-                .ok_or_else(|| "The image on the clipboard holds no QR code.".into());
+    /// The text of the QR code in the image on the clipboard, a screenshot say; or else the first
+    /// the webcam sees, `camera` or the first there is, whose frames go to `preview` until `stop`;
+    /// or else in the newest picture in `dir/send` that holds one. None if stopped.
+    pub fn scan_code(
+        intent: &UserIntent,
+        dir: &Path,
+        camera: Option<&Path>,
+        stop: &AtomicBool,
+        preview: &mut dyn FnMut(Preview),
+    ) -> Result<Option<String>, String> {
+        let clip = arboard::Clipboard::new().and_then(|mut c| c.get_image()).ok();
+        if let Some(text) = clip.and_then(|img| crate::qr::decode_rgba(img.width, img.height, &img.bytes)) {
+            return Ok(Some(text));
         }
+        #[cfg(all(target_os = "linux", target_pointer_width = "64"))]
+        if let Some(path) = camera.map(Path::to_path_buf).or_else(crate::webcam::find) {
+            return watch(&path, stop, preview);
+        }
+        let _ = (camera, stop, preview);
         let send = dir.join(SEND);
         let mut pictures: Vec<_> = list_files(intent, dir)?
             .into_iter()
@@ -174,6 +189,27 @@ mod imp {
         }
         Err(format!("No QR code found: copy a screenshot of it, or put a picture of it in {}.", send.display()))
     }
+
+    /// The text of the first QR code the webcam at `path` sees, its frames shown to `preview`,
+    /// for two minutes at most; none if stopped first.
+    #[cfg(all(target_os = "linux", target_pointer_width = "64"))]
+    fn watch(path: &Path, stop: &AtomicBool, preview: &mut dyn FnMut(Preview)) -> Result<Option<String>, String> {
+        use std::time::{Duration, Instant};
+        let mut cam = crate::webcam::Camera::open(path)?;
+        let until = Instant::now() + Duration::from_secs(120);
+        while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+            if Instant::now() > until {
+                return Err("No QR code came into the webcam's view in two minutes.".into());
+            }
+            let Some(luma) = cam.frame(Duration::from_millis(500))? else { continue };
+            let w = cam.width;
+            preview(crate::webcam::preview(&luma, w, cam.height, 480));
+            if let Some(text) = crate::qr::decode(w, cam.height, |x, y| luma[y * w + x]) {
+                return Ok(Some(text));
+            }
+        }
+        Ok(None)
+    }
 }
 
 #[cfg(target_os = "android")]
@@ -188,8 +224,9 @@ mod imp {
         crate::android::paste_text()
     }
 
-    /// The text of a QR code the camera sees, or none if the user went back.
-    pub fn scan_code(intent: &UserIntent, _: &Path) -> Result<Option<String>, String> {
+    /// The text of a QR code the camera sees, or none if the user went back. The system's
+    /// camera shows its own preview.
+    pub fn scan_code(intent: &UserIntent, _: &Path, _: Option<&Path>, _: &AtomicBool, _: &mut dyn FnMut(Preview)) -> Result<Option<String>, String> {
         crate::android::scan_code(intent)
     }
 }

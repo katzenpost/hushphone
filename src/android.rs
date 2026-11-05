@@ -61,6 +61,7 @@ fn android_main(app: AndroidApp) {
         wire_version: None,
         old_defaults: vec![OLD_DAEMON.into()],
         keys: crate::backend::Keys::System,
+        camera: None,
     };
     if let Err(e) = crate::run(setup) {
         eprintln!("hushphone: {e}");

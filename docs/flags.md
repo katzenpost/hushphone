@@ -12,6 +12,7 @@
 | `--data DIR` | where state, settings and received files live (default `$XDG_DATA_HOME/hushphone`) |
 | `--files DIR` | the one directory hushphone reads your files from and writes them to (default `~/hushphone`) |
 | `--name NAME` | your name, on the first start; otherwise hushphone asks |
+| `--camera DEVICE` | the webcam that scans voucher QR codes (default the first, `/dev/video0`…) |
 | `--wire-version 3\|4` | the katzenqt1 wire version written and minted: 3 (map form, long vouchers) or 4 (compact; default); saved for later starts; both are read |
 
 Flags that do not go with the transport, such as `--daemon` with `reticulum`, are refused.
