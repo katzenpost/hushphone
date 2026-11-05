@@ -21,8 +21,8 @@ path = "src/main.rs"
 
 [dependencies]
 slint = "=1.18.1"
-# katzenpost/pigeonhole_protocols#33: hpqc#156 (CTIDH via highctidh-rs) and contact vouchers on reticulum-rs.
-pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "90cc52da7ea49c18fc3cd9f3ffb00326665be490", features = ["reticulum-rs"] }
+# katzenpost/pigeonhole_protocols#34: voucher codes are whitespace-stripped and must be 32 bytes.
+pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "3b22a9795bbcd36c0d8025559cab02077699c708", features = ["reticulum-rs"] }
 # The same revision pigeonhole_protocols builds on (katzenpost/thin_client#100), so that there is
 # one ThinClient type; back to crates.io once it is released.
 katzenpost_thin_client = { git = "https://github.com/katzenpost/thin_client", rev = "98ff985ad348156eccbe7d3f4c4849a47041f2d3" }
