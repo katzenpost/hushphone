@@ -109,6 +109,7 @@ fn namenlos_interop() {
             wire_version: None,
             old_defaults: Vec::new(),
             keys: hushphone::backend::Keys::None,
+            camera: None,
         },
     );
     ui.show().unwrap();

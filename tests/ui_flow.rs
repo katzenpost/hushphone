@@ -57,6 +57,7 @@ fn make_a_group_and_talk() {
             wire_version: Some(3),
             old_defaults: Vec::new(),
             keys: hushphone::backend::Keys::None,
+            camera: None,
         },
     );
     // --wire-version is saved for later starts, and the backend reads it from the settings.

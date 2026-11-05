@@ -18,6 +18,9 @@ pub mod sandbox;
 pub mod settings;
 pub mod text;
 pub mod voice;
+// The kernel structures it uses are laid out for 64-bit targets.
+#[cfg(all(target_os = "linux", target_pointer_width = "64"))]
+pub mod webcam;
 
 #[cfg(target_os = "android")]
 mod android;

@@ -5,7 +5,7 @@ use hushphone::backend::Source;
 
 const USAGE: &str = "usage: hushphone [--transport mixnet|reticulum|reticulum-py] [--daemon ADDRESS]
                  [--replica HOST:PORT | --rns-config DIR] [--box-size N] [--sim SOCKET | --memory]
-                 [--data DIR] [--files DIR] [--name NAME] [--wire-version 3|4]
+                 [--data DIR] [--files DIR] [--name NAME] [--wire-version 3|4] [--camera DEVICE]
 
   --transport T     how Pigeonhole is reached: mixnet, the Katzenpost mixnet through kpclientd
                     (default); reticulum, a Reticulum mesh through Reticulum-rs; or reticulum-py,
@@ -20,7 +20,8 @@ const USAGE: &str = "usage: hushphone [--transport mixnet|reticulum|reticulum-py
   --data DIR        keep state in DIR (default $XDG_DATA_HOME/hushphone)
   --files DIR       send files from DIR/send and save received ones in DIR/received (default ~/hushphone)
   --name NAME       your name, on the first start
-  --wire-version N  write and mint katzenqt1 wire version 3 (map form, long vouchers) or 4 (compact; default)";
+  --wire-version N  write and mint katzenqt1 wire version 3 (map form, long vouchers) or 4 (compact; default)
+  --camera DEVICE   the webcam that scans voucher QR codes (default the first, /dev/video0…)";
 
 fn main() {
     #[cfg(target_os = "linux")]
@@ -29,6 +30,7 @@ fn main() {
     let mut source = None;
     let mut data = None;
     let mut files = None;
+    let mut camera = None;
     let mut name = None;
     let mut wire_version = None;
     let mut replica: Option<String> = None;
@@ -52,6 +54,7 @@ fn main() {
             "--memory" => source = Some(Source::Memory(Default::default())),
             "--data" => data = Some(PathBuf::from(value())),
             "--files" => files = Some(PathBuf::from(value())),
+            "--camera" => camera = Some(PathBuf::from(value())),
             "--name" => name = Some(value()),
             "--wire-version" => match value().as_str() {
                 "3" => wire_version = Some(3),
@@ -117,6 +120,7 @@ fn main() {
         wire_version,
         old_defaults: Vec::new(),
         keys: hushphone::backend::Keys::System,
+        camera,
     };
     if let Err(e) = hushphone::run(setup) {
         eprintln!("hushphone: {e}");

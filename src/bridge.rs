@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
@@ -62,6 +64,8 @@ pub struct Setup {
     pub old_defaults: Vec<String>,
     /// How the state is kept at rest.
     pub keys: Keys,
+    /// Linux: the webcam to scan QR codes with; the first there is when none.
+    pub camera: Option<PathBuf>,
 }
 
 struct App {
@@ -84,6 +88,8 @@ struct App {
     ticket: u64,
     /// Which group a recording in progress is for.
     recording_for: Option<ChatId>,
+    /// Set to stop the webcam scan in progress.
+    scanning: Option<Arc<AtomicBool>>,
     chat_model: Rc<VecModel<ChatItem>>,
     pending_model: Rc<VecModel<ChatItem>>,
     line_model: Rc<VecModel<LineItem>>,
@@ -175,6 +181,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         voice,
         ticket: 0,
         recording_for: None,
+        scanning: None,
         chat_model,
         pending_model,
         line_model,
@@ -351,6 +358,9 @@ fn wire(ui: &AppWindow) {
     });
     a.on_scan_code(|| {
         with_app(|app| app.scan_code(UserIntent::new()));
+    });
+    a.on_stop_scan(|| {
+        with_app(|app| app.stop_scan());
     });
     a.on_open_attach(|| {
         with_app(|app| app.open_attach(UserIntent::new()));
@@ -584,17 +594,42 @@ impl App {
     }
 
     /// Read a voucher code from a QR code, off this thread, into the field a pasted one goes in.
+    /// Pressed again while the webcam looks, it stops.
     fn scan_code(&mut self, intent: UserIntent) {
+        if self.scanning.is_some() {
+            self.stop_scan();
+            return;
+        }
         self.state(|s| s.set_scanned_code("".into()));
-        let dir = self.setup.files_dir.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        self.scanning = Some(stop.clone());
+        let (dir, camera) = (self.setup.files_dir.clone(), self.setup.camera.clone());
         self.effects.spawn(async move {
-            let r = tokio::task::spawn_blocking(move || effects::scan_code(&intent, &dir)).await.unwrap_or_else(|e| Err(e.to_string()));
-            later(move |app| match r {
-                Ok(Some(code)) => app.state(|s| s.set_scanned_code(code.into())),
-                Ok(None) => {}
-                Err(e) => app.notice(&e, true),
+            let mine = stop.clone();
+            let r = tokio::task::spawn_blocking(move || {
+                let mut preview = |frame| later(move |app| app.state(|s| s.set_scan_preview(slint::Image::from_rgb8(frame))));
+                effects::scan_code(&intent, &dir, camera.as_deref(), &stop, &mut preview)
+            })
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
+            later(move |app| {
+                if app.scanning.as_ref().is_some_and(|s| Arc::ptr_eq(s, &mine)) {
+                    app.scanning = None;
+                }
+                app.state(|s| s.set_scan_preview(slint::Image::default()));
+                match r {
+                    Ok(Some(code)) => app.state(|s| s.set_scanned_code(code.into())),
+                    Ok(None) => {}
+                    Err(e) => app.notice(&e, true),
+                }
             });
         });
+    }
+
+    fn stop_scan(&mut self) {
+        if let Some(stop) = self.scanning.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
     }
 
     /// Send the file `name` from the send directory to the current group; on Android, the

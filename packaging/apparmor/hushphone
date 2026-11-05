@@ -1,9 +1,9 @@
 # AppArmor profile for hushphone. kpclientd does all the networking, so hushphone may use unix
 # sockets only: no IP at all. It reads and writes its own data, reads the files the user puts in
 # ~/hushphone/send to send them, writes received files the user saves into ~/hushphone/received,
-# and starts no program. On the session bus it may speak only to the bus itself and to the
-# keyring (the Secret Service): not to the user's systemd, which would start programs for it,
-# nor to the portals.
+# reads the webcam while it scans a QR code, and starts no program. On the session bus it may
+# speak only to the bus itself and to the keyring (the Secret Service): not to the user's
+# systemd, which would start programs for it, nor to the portals.
 #
 # A kpclientd reached at host:port, and the Reticulum transports (--transport reticulum or
 # reticulum-py), need TCP; allow it in /etc/apparmor.d/local/hushphone with
@@ -26,6 +26,8 @@ profile hushphone /usr/bin/hushphone {
   include if exists <abstractions/nameservice-strict>
   include if exists <abstractions/wayland>
   include if exists <abstractions/X>
+  # The webcam, to scan a voucher's QR code: /dev/video* and its entries in /sys.
+  include if exists <abstractions/video>
   # The session bus itself, over its socket in /run/user or dbus-launch's abstract one.
   include <abstractions/dbus-session-strict>
 

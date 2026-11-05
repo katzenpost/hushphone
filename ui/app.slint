@@ -822,6 +822,13 @@ component NameDialog inherits Dialog {
     VerticalLayout {
         spacing: Theme.s2;
         FieldLabel { text: root.label; }
+        if root.scannable && AppState.scan-preview.width > 0: Image {
+            source: AppState.scan-preview;
+            height: 240px;
+            image-fit: contain;
+            accessible-role: image;
+            accessible-label: "what the webcam sees";
+        }
         field := LineEdit {
             text <=> root.value;
             accepted => { if (!root.value.is-empty) { root.submitted(root.value); } }
@@ -831,7 +838,10 @@ component NameDialog inherits Dialog {
     HorizontalLayout {
         alignment: end;
         spacing: Theme.s2;
-        if root.scannable: Button { text: "Scan QR"; activated => { Actions.scan-code(); } }
+        if root.scannable: Button {
+            text: AppState.scan-preview.width > 0 ? "Stop" : "Scan QR";
+            activated => { Actions.scan-code(); }
+        }
         if root.closable: Button { text: "Cancel"; activated => { root.dismissed(); } }
         Button {
             text: root.action;
@@ -1237,8 +1247,9 @@ export component AppWindow inherits Window {
                 hint: "Paste the code the newcomer gave you, or scan its QR code. They will see the group's members and its messages from now on.";
                 action: "Add member";
                 scannable: true;
-                dismissed => { root.overlay = Overlay.none; }
+                dismissed => { Actions.stop-scan(); root.overlay = Overlay.none; }
                 submitted(v) => {
+                    Actions.stop-scan();
                     Actions.invite(v);
                     root.overlay = Overlay.none;
                 }

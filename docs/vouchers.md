@@ -43,10 +43,13 @@ When the member adds the code, the group's messages and members appear on your s
 Open the group and press **Add a member**, the icon with a plus next to the person. Paste the code
 the newcomer gave you, or press **Scan QR** to read it off their screen, a T-Deck's too, and
 press **Add member**. On Android, Scan opens the camera; it asks for the camera the first time. On
-Linux, Scan reads a screenshot of the code on the clipboard, or else the newest picture of one in
-`~/hushphone/send`.
+Linux, Scan reads a screenshot of the code on the clipboard; or else, with a webcam, shows what it
+sees until you hold the code up to it (`--camera /dev/videoN` picks one; press Stop to give up); or
+else the newest picture of one in `~/hushphone/send`.
 
 ![Add a member: their voucher code, scanned](vouchers/invite-dialog.png)
+
+![Scanning with the webcam: what it sees, until a code comes into focus](vouchers/scan-webcam.png)
 
 <img src="vouchers/scan-android.png" alt="On Android: a T-Deck's voucher code, read by the camera" width="270">
 

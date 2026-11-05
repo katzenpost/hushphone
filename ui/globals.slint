@@ -91,6 +91,8 @@ export global AppState {
     in property <image> code-qr;
     // A voucher code read from a QR code, for the Add member field.
     in property <string> scanned-code;
+    // What the webcam sees while it looks for a QR code; empty otherwise.
+    in property <image> scan-preview;
     in property <bool> minting;
     // The group's latest notice while joining, such as a step that failed.
     in property <string> joining-note;
@@ -126,8 +128,9 @@ export global Actions {
     callback expand(int);
     callback copy-code();
     callback paste-code() -> string;
-    // Read a voucher code from a QR code, into scanned-code.
+    // Read a voucher code from a QR code, into scanned-code; again, stop the webcam looking.
     callback scan-code();
+    callback stop-scan();
     callback leave();
     callback clear();
     callback rename(string);
