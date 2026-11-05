@@ -1,17 +1,16 @@
 # hushphone
 
-Group chat over the [Katzenpost](https://katzenpost.network) mixnet, with push-to-talk voice
-messages, for Linux and Android. It is written in Rust with a [Slint](https://slint.dev) interface.
+Group chat with push-to-talk voice messages, for Linux and Android. It runs over the
+[Katzenpost](https://katzenpost.network) mixnet or over a [Reticulum](https://reticulum.network)
+mesh, and members on the two share groups through a bridge replica. It is written in Rust with a
+[Slint](https://slint.dev) interface.
 
-hushphone speaks katzenqt's group chat protocol through the
-[pigeonhole](https://github.com/katzenpost/pigeonhole) client, so its groups are shared with
-katzenqt, [jam](https://github.com/katzenpost/jam) and
-[frank_chat](https://github.com/katzenpost/frank_chat). Voice messages are Ogg Opus clips recorded
+hushphone speaks katzenqt's group chat protocol on [Pigeonhole](https://github.com/katzenpost/pigeonhole)
+boxes, so its groups are shared with katzenqt, [jam](https://github.com/katzenpost/jam),
+[frank_chat](https://github.com/katzenpost/frank_chat) and, on the mesh,
+[katzenrns](https://github.com/katzenpost/katzenrns). Voice messages are Ogg Opus clips recorded
 with [rustic_audio](https://github.com/katzenpost/rustic_audio), sent as frank_chat and katzenqt
 send them: a file of type `audio/opus` named by its SHA-256.
-
-hushphone does no networking of its own. It needs the Katzenpost client daemon, `kpclientd`,
-running beside it.
 
 <p>
   <img src="docs/desktop.png" alt="hushphone on the Linux desktop: a group with a voice clip, messages from a jam user and read receipts" width="640">
@@ -20,31 +19,112 @@ running beside it.
 
 The same group on the desktop and on Android, over the namenlos mixnet. jules is using jam.
 
-## Linux
+## Quick start
 
-Building needs `pkg-config`, ALSA and fontconfig:
+### Linux, on the mesh
+
+The quickest way in: no daemon, just one TCP link to namenlos's bridge replica, which is on both
+the mesh and the mixnet. You need [Rust](https://rustup.rs) (rustup fetches the pinned version by
+itself) and:
 
 ```sh
-sudo apt install pkg-config libasound2-dev libfontconfig-dev
-cargo run --release -- --daemon @katzenpost
+sudo apt install git pkg-config libasound2-dev libfontconfig-dev
+git clone https://github.com/katzenpost/hushphone && cd hushphone
+cargo run --release -- --transport reticulum --replica 162.220.11.225:4242
 ```
 
-hushphone reaches Pigeonhole over one of three transports, chosen with `--transport`:
+The status bar reads "On the Reticulum mesh" within about twenty seconds. Then start a group, or
+join one (see [Using it](#using-it)).
 
-- `mixnet` (default): the Katzenpost mixnet, through kpclientd.
-- `reticulum`: a Reticulum mesh, through [Reticulum-rs](https://github.com/BeechatNetworkSystemsLtd/Reticulum-rs), in Rust.
-- `reticulum-py`: a Reticulum mesh, through the official Python RNS embedded with PyO3. It needs
-  `cargo build --features reticulum-py`, Python's development files (`python3-dev`) to build, and
-  the Python packages `rns`, `pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` at run time, in
-  the virtual environment `VIRTUAL_ENV` names or system-wide.
+### Linux, on the mixnet
+
+hushphone does no mixnet networking of its own: the Katzenpost client daemon, `kpclientd`, does
+it. Build it ([Go](https://go.dev/dl/) 1.26 or later) and start it with the namenlos config:
+
+```sh
+git clone --depth 1 https://github.com/katzenpost/katzenpost && cd katzenpost
+make kpclientd
+cmd/kpclientd/kpclientd -c docker/client-configs/namenlos.toml
+```
+
+It listens on the abstract socket `@katzenpost`, where hushphone looks by default. Then, in the
+hushphone checkout:
+
+```sh
+cargo run --release
+```
+
+The status bar reads "kpclientd is on the mixnet" once the daemon has reached a gateway.
+
+### Android
+
+Install two APKs from their latest GitHub releases, `arm64-v8a` for a phone (`x86_64` for an
+emulator):
+
+- [kpclientd-android](https://github.com/katzenpost/kpclientd-android/releases/latest), which runs
+  kpclientd on the phone;
+- [hushphone](https://github.com/katzenpost/hushphone/releases/latest).
+
+Start hushphone and allow it when kpclientd-android asks. On Android, hushphone uses the mixnet.
+
+## Transports
+
+`--transport` picks how hushphone reaches Pigeonhole. The groups, the protocol and the window are
+the same on all three.
+
+| | `mixnet` (default) | `reticulum` | `reticulum-py` |
+|---|---|---|---|
+| Network | the Katzenpost mixnet | a Reticulum mesh | a Reticulum mesh |
+| Through | kpclientd, over its thin client socket | [Reticulum-rs](https://github.com/BeechatNetworkSystemsLtd/Reticulum-rs), in hushphone's own process | the official Python [RNS](https://github.com/markqvist/Reticulum), in hushphone's own process |
+| Build | default | default | `--features reticulum-py`, and `python3-dev` |
+| Needs at run time | a running kpclientd | a replica's address | a replica's address or a Reticulum config, and the Python packages below |
+| Platforms | Linux, Android | Linux | Linux |
+
+**mixnet** hides who talks to whom from the network: kpclientd sends hushphone's messages
+through the Katzenpost mix nodes to the replicas.
+
+```sh
+cargo run --release -- --transport mixnet --daemon @katzenpost
+```
+
+**reticulum** is pure Rust. hushphone starts a Reticulum instance of its own with one TCP link to
+a replica's Reticulum interface. It needs nothing else
+installed, so it is the mesh transport to pick unless you want the Python one.
 
 ```sh
 cargo run --release -- --transport reticulum --replica 162.220.11.225:4242
 ```
 
-Members on the mesh and on the mixnet share groups through a bridge replica, such as namenlos's at
-`162.220.11.225:4242`. On `reticulum`, minting and redeeming contact vouchers fail for now: the
-Rust hpqc has no voucher module yet.
+**reticulum-py** reaches the same mesh through the reference Reticulum implementation. It is not
+a Python program: hushphone stays one Rust binary, which embeds CPython through
+[PyO3](https://pyo3.rs) (that is, CPython's C API) and calls the Python packages `rns`,
+`pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` in-process. Pick it to run against the same
+RNS as the rest of your Reticulum programs, or to use an existing Reticulum config, with all its
+interfaces, through `--rns-config DIR`. The packages are looked for in the virtual environment
+`VIRTUAL_ENV` names, or system-wide; compact vouchers need hpqc's `katzenqt1-v4` branch:
+
+```sh
+sudo apt install python3-dev python3-venv
+python3 -m venv ~/.venvs/hushphone
+~/.venvs/hushphone/bin/pip install rns \
+    "hpqc @ git+https://github.com/katzenpost/hpqc@katzenqt1-v4#subdirectory=py" \
+    "pigeonhole_protocols @ git+https://github.com/katzenpost/pigeonhole_protocols#subdirectory=py" \
+    "pigeonhole_rns @ git+https://github.com/katzenpost/pigeonhole_rns"
+VIRTUAL_ENV=~/.venvs/hushphone cargo run --release --features reticulum-py -- \
+    --transport reticulum-py --replica 162.220.11.225:4242
+```
+
+**Across the bridge.** Members on the mesh and on the mixnet share groups through a bridge
+replica, such as namenlos's at `162.220.11.225:4242`. Either side can found a group and add the
+other with a voucher, with one exception for now: a group founded on the mixnet can add a mesh
+member only from a long voucher, so a mesh user joining one starts hushphone with
+`--wire-version 3` until kpclientd reads the compact form.
+
+`--replica` writes a Reticulum config for that one link under the data directory
+(`reticulum/config`), on every start; the identity beside it stays. That instance is hushphone's
+own: it does not touch `~/.reticulum` and is not shared with other Reticulum programs.
+
+## Flags
 
 | Flag | |
 |---|---|
@@ -62,7 +142,7 @@ Rust hpqc has no voucher module yet.
 
 Flags that do not go with the transport, such as `--daemon` with `reticulum`, are refused.
 
-### Debian package
+## Debian package
 
 `make deb` builds `dist/hushphone_<version>_amd64.deb` in a Debian 13 build container, with
 podman. The package installs the app, its desktop entry and its icon:
@@ -72,9 +152,9 @@ make deb                      # or: make deb DISTRO=ubuntu-24.04
 sudo apt install ./dist/hushphone_*.deb
 ```
 
-Its AppArmor profile allows no IP sockets, so `--transport reticulum` and a kpclientd at
+Its AppArmor profile allows no IP sockets, so the Reticulum transports and a kpclientd at
 `host:port` need the TCP lines the profile's head comment gives, in
-`/etc/apparmor.d/local/hushphone`.
+`/etc/apparmor.d/local/hushphone`. The package is built without `reticulum-py`.
 
 The package is reproducible. `make deb-ci`, run in the build container as CI does, builds it,
 installs and tests it, then builds it again in another directory and checks that both packages
@@ -84,14 +164,16 @@ are the same.
 
 hushphone reaches the mixnet through
 [kpclientd-android](https://github.com/katzenpost/kpclientd-android), which runs kpclientd on the
-phone and lets in only the apps you allow. Install both from their GitHub releases: the
-`arm64-v8a` APKs for a phone, `x86_64` for an emulator.
+phone and lets in only the apps you allow.
+
 - **Asking.** On its first start, hushphone asks kpclientd-android for a connection.
   kpclientd-android then asks you whether hushphone may use the mixnet.
 - **Connecting.** Once you allow it, every connection hushphone makes comes from kpclientd-android
   as a unix socket. hushphone joins it to a socket in its own private directory, which its thin
   client dials.
 - **No network.** hushphone has no internet permission and opens no IP socket.
+
+To build the APK:
 
 ```sh
 cargo install cargo-ndk --locked --version 4.1.2
@@ -110,8 +192,8 @@ ship one.
 ## Using it
 
 - **Start a group** with New group. Only you see the name you give it.
-- **Join someone's group** with Join a group. hushphone mints a voucher over the mixnet and shows
-  its code. Give the code to a member of the group over a channel you trust; when they add it with
+- **Join someone's group** with Join a group. hushphone mints a voucher, over the mixnet or the mesh, and
+  shows its code. Give the code to a member of the group over a channel you trust; when they add it with
   Add a member, you join. [docs/vouchers.md](docs/vouchers.md) walks through both sides with
   screenshots.
 - **Talk** by holding the microphone button, or Space while it has focus; let go to send. Escape,
@@ -174,16 +256,17 @@ whatever other members send is untrusted.
     cache; it is wiped the next time and when hushphone starts.
   - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
     copy is written over and removed, but flash storage may still hold its old blocks.
-- **On disk.** Settings (your name, the daemon's address, the theme) are written with mode 0600
+- **On disk.** Settings (your name, the daemon's address, the theme, the wire version) are written with mode 0600
   and are not sealed. The names you give members, with their keys, and what you have read are a
   contact list, so they are kept with the state, sealed when it is. A file you save is written
   out plain in `~/hushphone/received`, since that is what saving is for. Logs hold no message
   text.
-- **Sandboxed.** kpclientd does all the networking, so hushphone needs very little of the system.
-  - **seccomp.** Once hushphone knows the daemon's address, it puts a seccomp filter on every
+- **Sandboxed.** On the mixnet, kpclientd does all the networking, so hushphone needs very little
+  of the system.
+  - **seccomp.** Once hushphone knows how it reaches Pigeonhole, it puts a seccomp filter on every
     thread. With kpclientd on a unix socket, as on Linux (`@katzenpost`), it may open unix
-    sockets only, with no TCP or UDP at all. With kpclientd at `host:port`, as on Android, it may
-    also open TCP sockets, but still no UDP or raw ones. In either case it cannot start a program,
+    sockets only, with no TCP or UDP at all. With kpclientd at `host:port`, or on a Reticulum
+    transport, it may also open TCP sockets, but still no UDP or raw ones. In either case it cannot start a program,
     trace a process or read its memory, use io_uring, BPF or perf, load kernel modules, mount, or
     change namespaces. The filter cannot be lifted while the app runs, so a TCP address set in
     Settings takes effect after a restart. `HUSHPHONE_SANDBOX=off` leaves the filter off, for
@@ -193,9 +276,10 @@ whatever other members send is untrusted.
     and hushphone's own data and cache, and nothing else of yours; the daemon's socket,
     `@katzenpost`, the display and the sound server; and on the session bus only the bus itself and
     the keyring, so that neither the user's systemd nor the portals can be asked to run or open
-    anything. To reach kpclientd over TCP, or at another abstract socket, add the rule the profile
+    anything. To reach kpclientd over TCP or the mesh, or kpclientd at another
+    abstract socket, add the rule the profile
     names in its comment to `/etc/apparmor.d/local/hushphone`.
-  - **If the filter cannot be applied,** hushphone does not connect to the daemon; it says so, and
+  - **If the filter cannot be applied,** hushphone does not connect; it says so, and
     `HUSHPHONE_SANDBOX=off` is the way to run without the filter on purpose.
   - **Android.** hushphone gets its connections to kpclientd from kpclientd-android, as unix
     sockets, so the unix-only filter applies there too, on top of Android's own SELinux and
