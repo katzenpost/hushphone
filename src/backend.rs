@@ -32,6 +32,24 @@ pub enum Source {
     SimSocket(PathBuf),
     /// An in-memory Pigeonhole shared by the clients of this process.
     Memory(World),
+    /// A Reticulum mesh through Reticulum-rs: a replica's Reticulum TCP interface, `host:port`,
+    /// and the box size.
+    Mesh(String, usize),
+    /// A Reticulum mesh through the Python RNS, embedded: the Reticulum config directory and the
+    /// box size.
+    #[cfg(feature = "reticulum-py")]
+    MeshPy(PathBuf, usize),
+}
+
+impl Source {
+    pub fn is_mesh(&self) -> bool {
+        match self {
+            Source::Mesh(..) => true,
+            #[cfg(feature = "reticulum-py")]
+            Source::MeshPy(..) => true,
+            _ => false,
+        }
+    }
 }
 
 /// How the state is kept at rest.
@@ -247,6 +265,26 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
             tell(Update::Link(Link::Online));
             serve(cfg(), Remote { socket: s.clone() }, None, &att, &mut rx, &tell).await;
         }
+        Source::Mesh(addr, box_size) => {
+            use pigeonhole_protocols::transport::reticulum_rs::ReticulumRsBackend;
+            tell(Update::Link(Link::Connecting));
+            let b = ReticulumRsBackend::connect(addr, *box_size, MESH_WAIT).await;
+            mesh(b, cfg(), &att, &mut rx, &tell).await;
+        }
+        #[cfg(feature = "reticulum-py")]
+        Source::MeshPy(dir, box_size) => {
+            use pigeonhole_protocols::transport::reticulum_py::ReticulumPyBackend;
+            tell(Update::Link(Link::Connecting));
+            let b = ReticulumPyBackend::connect(Some(dir), *box_size, MESH_WAIT).await.map_err(|e| {
+                let e = e.to_string();
+                if e.contains("ModuleNotFoundError") {
+                    format!("{e}. The Python mesh needs the Python packages rns, pigeonhole_rns, pigeonhole_protocols and hpqc, in the virtual environment VIRTUAL_ENV names or system-wide")
+                } else {
+                    e
+                }
+            });
+            mesh(b, cfg(), &att, &mut rx, &tell).await;
+        }
         Source::Daemon(addr) => {
             let mut wait = Duration::from_secs(1);
             loop {
@@ -343,6 +381,32 @@ enum Served {
     Quit,
     /// The client stopped; a new one may be opened.
     Stopped,
+}
+
+const MESH_WAIT: Duration = Duration::from_secs(90);
+
+/// Serves over a mesh transport that `b` is, or reports why it is not.
+async fn mesh<B: Backend>(
+    b: Result<B, impl std::fmt::Display>,
+    cfg: Config,
+    att: &Attachments,
+    rx: &mut mpsc::UnboundedReceiver<Cmd>,
+    tell: &impl Fn(Update),
+) {
+    match b {
+        Ok(b) => {
+            eprintln!("hushphone: reached a replica on the mesh");
+            tell(Update::Link(Link::Online));
+            serve(cfg, b, None, att, rx, tell).await;
+        }
+        // Not retried: Python's Reticulum starts once per process, and Reticulum-rs keeps trying
+        // its TCP link by itself.
+        Err(e) => {
+            eprintln!("hushphone: can't reach a replica on the mesh: {e}");
+            tell(Update::Link(Link::Unreachable));
+            tell(Update::Failed(format!("Can't reach a replica on the mesh: {e}")));
+        }
+    }
 }
 
 async fn serve<B: Backend>(
