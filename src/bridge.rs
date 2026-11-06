@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
-use pigeonhole_protocols::protocols::katzenqt1::engine::{ChatId, parse_voucher_code, voucher_code};
+use pigeonhole_protocols::protocols::katzenqt1::engine::{ChatId, NoticeKind, parse_voucher_code, voucher_code};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::mpsc::UnboundedSender;
 use zeroize::Zeroizing;
@@ -548,7 +548,9 @@ impl App {
                 }
                 let files = &self.files;
                 self.radio.arrived(&id, &c.lines, |a| files.types.contains_key(&a.file));
-                let pinged = self.pings.arrived(&id, &c.lines).last().map(|n| {
+                let arrived = self.pings.arrived(&id, &c.lines);
+                let pinged = arrived.iter().any(|n| n.kind == NoticeKind::Pinged);
+                let arrived = arrived.last().map(|n| {
                     format!("{} in {}", model::notice_text(n), c.view.as_ref().map(|v| text::name(&v.name)).unwrap_or_default())
                 });
                 if self.current.as_deref() == Some(id.as_str()) {
@@ -556,8 +558,10 @@ impl App {
                     self.remember_seen(&id);
                 }
                 self.pump();
-                if let Some(who) = pinged {
-                    self.notice(&who, false);
+                if let Some(text) = arrived {
+                    self.notice(&text, false);
+                }
+                if pinged {
                     self.chime(ping::RECEIVED);
                 }
                 self.render_chats();
