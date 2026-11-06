@@ -806,6 +806,12 @@ component Conversation inherits Rectangle {
                 }
                 if AppState.current-joined: IconButton {
                     y: (parent.height - self.height) / 2;
+                    icon: @image-url("icons/bell.svg");
+                    label: "Ping " + AppState.current-name + " (Ctrl+P)";
+                    activated => { Actions.ping(); }
+                }
+                if AppState.current-joined: IconButton {
+                    y: (parent.height - self.height) / 2;
                     icon: @image-url("icons/radio.svg");
                     label: AppState.current-radio ? "Radio on: voice messages play as they arrive" : "Radio off: voice messages wait to be played";
                     tint: AppState.current-radio ? Theme.accent : Theme.text-muted;
@@ -1252,6 +1258,10 @@ export component AppWindow inherits Window {
         capture-key-pressed(e) => {
             if (e.text == Key.F10) {
                 root.blanked = !root.blanked;
+                return accept;
+            }
+            if (e.modifiers.control && (e.text == "p" || e.text == "P") && AppState.current != "") {
+                Actions.ping();
                 return accept;
             }
             reject
