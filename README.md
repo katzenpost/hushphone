@@ -38,7 +38,7 @@ or the mesh (see [docs/android.md](docs/android.md)).
 - [Building and running](docs/building.md): Linux, the three transports, the Debian package, tests, releases
 - [Android](docs/android.md)
 - [Flags](docs/flags.md)
-- [Using it](docs/using.md) and [vouchers](docs/vouchers.md), shown and scanned as QR codes (also a T-Deck's)
+- [Using it](docs/using.md) and [vouchers](docs/vouchers.md), shown and scanned as QR codes, or sent by sound (also a T-Deck's)
 - [Security](docs/SECURITY.md)
 
 ## License

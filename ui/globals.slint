@@ -89,10 +89,16 @@ export global AppState {
     in property <string> code;
     // The same code as a QR code, one pixel per module.
     in property <image> code-qr;
-    // A voucher code read from a QR code, for the Add member field.
+    // The 4 digits both screens show for the voucher, when it can go by sound; empty otherwise.
+    in property <string> code-check;
+    in property <bool> sending-sound;
+    // A voucher code read from a QR code or heard, for the Add member field.
     in property <string> scanned-code;
     // What the webcam sees while it looks for a QR code; empty otherwise.
     in property <image> scan-preview;
+    in property <bool> listening;
+    // What Listen is doing, for the Add member dialog: the countdown, what it heard, or why not.
+    in property <string> sound-note;
     in property <bool> minting;
     // The group's latest notice while joining, such as a step that failed.
     in property <string> joining-note;
@@ -131,6 +137,11 @@ export global Actions {
     // Read a voucher code from a QR code, into scanned-code; again, stop the webcam looking.
     callback scan-code();
     callback stop-scan();
+    // Play the current voucher by sound, as the T-Deck hears it.
+    callback send-sound();
+    // Listen for a voucher by sound, into scanned-code; again, stop.
+    callback listen();
+    callback stop-listen();
     callback leave();
     callback clear();
     callback rename(string);

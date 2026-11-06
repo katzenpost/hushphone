@@ -580,6 +580,22 @@ component VoucherCard inherits Card {
                 activated => { root.cancel(); }
             }
         }
+        if AppState.code-check != "": HorizontalLayout {
+            alignment: start;
+            spacing: Theme.s3;
+            Button {
+                text: AppState.sending-sound ? "Sending…" : "Send by sound";
+                enabled: !AppState.sending-sound;
+                activated => { Actions.send-sound(); }
+            }
+            Text {
+                text: "check " + AppState.code-check;
+                color: Theme.warn;
+                font-weight: 700;
+                vertical-alignment: center;
+                accessible-label: "check digits " + AppState.code-check;
+            }
+        }
     }
 }
 
@@ -814,7 +830,7 @@ component NameDialog inherits Dialog {
     in property <string> hint;
     in property <string> action;
     in-out property <string> value;
-    // Offers to scan a QR code, whose text then fills the field.
+    // Offers to scan a QR code, or to listen for a voucher sent by sound, which then fills the field.
     in property <bool> scannable;
     in property <string> scanned: AppState.scanned-code;
     changed scanned => { if (root.scanned != "") { root.value = root.scanned; } }
@@ -834,14 +850,23 @@ component NameDialog inherits Dialog {
             accepted => { if (!root.value.is-empty) { root.submitted(root.value); } }
         }
         Hint { text: root.hint; }
+        if root.scannable && AppState.sound-note != "": Hint { text: AppState.sound-note; color: Theme.text; }
+    }
+    if root.scannable: HorizontalLayout {
+        alignment: start;
+        spacing: Theme.s2;
+        Button {
+            text: AppState.listening ? "Stop" : "Listen";
+            activated => { Actions.listen(); }
+        }
+        Button {
+            text: AppState.scan-preview.width > 0 ? "Stop" : "Scan QR";
+            activated => { Actions.scan-code(); }
+        }
     }
     HorizontalLayout {
         alignment: end;
         spacing: Theme.s2;
-        if root.scannable: Button {
-            text: AppState.scan-preview.width > 0 ? "Stop" : "Scan QR";
-            activated => { Actions.scan-code(); }
-        }
         if root.closable: Button { text: "Cancel"; activated => { root.dismissed(); } }
         Button {
             text: root.action;
@@ -1244,12 +1269,13 @@ export component AppWindow inherits Window {
             if root.overlay == Overlay.invite: NameDialog {
                 title: "Add a member to " + AppState.current-name;
                 label: "Their voucher code";
-                hint: "Paste the code the newcomer gave you, or scan its QR code. They will see the group's members and its messages from now on.";
+                hint: "Paste the code the newcomer gave you, scan its QR code, or choose Listen while their device sends it by sound. They will see the group's members and its messages from now on.";
                 action: "Add member";
                 scannable: true;
-                dismissed => { Actions.stop-scan(); root.overlay = Overlay.none; }
+                dismissed => { Actions.stop-scan(); Actions.stop-listen(); root.overlay = Overlay.none; }
                 submitted(v) => {
                     Actions.stop-scan();
+                    Actions.stop-listen();
                     Actions.invite(v);
                     root.overlay = Overlay.none;
                 }

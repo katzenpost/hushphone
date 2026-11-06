@@ -31,7 +31,7 @@ whatever other members send is untrusted.
 - **Authority follows the user's action.** Only the window's own callbacks can copy, paste, open
   the microphone, pick or save a file; nothing that arrives from the network can. Received files
   are never saved on their own, and their type is read from their bytes, not their name. A
-  recording indicator is shown for exactly as long as the microphone is open.
+  recording indicator, or Listen's countdown, is shown for exactly as long as the microphone is open.
 - **Files pass through one directory.** On Linux, hushphone reads only `~/hushphone/send` and
   writes only `~/hushphone/received`; its sandbox lets it see no other file of yours. The desktop's
   file chooser is not used, since it hands an app a path and leaves it to read the file with the
@@ -219,7 +219,7 @@ Each number below is Yee's. Only the guidelines hushphone has a clear answer to 
 - **1. Least authority on the easiest path.** The sandbox applies without any setup. On Linux, hushphone gets the daemon's socket, the display and the sound server, no IP, the keyring on the session bus and nothing else there, and of the user's files only `~/hushphone/send` to read and `~/hushphone/received` to write. On Android, it doesn't ask for the storage permissions; on the mixnet kpclientd-android hands it connected sockets, and the internet permission is used only for the mesh's one TCP link to a replica; and the document picker hands it one file at a time.
 - **2. Authority follows consent.** See `UserIntent` above. Received files are never saved on their own, and joining a group takes a voucher code that the user passes on, and that a member adds by hand.
 - **3. Authority can be taken back.** In kpclientd-android, **Forget** withdraws an app's access and ends its connections at once.
-- **4. Awareness of others' authority.** The recording indicator shows for exactly as long as the microphone is open, and kpclientd-android's **Apps** list shows every app the user has answered about.
+- **4. Awareness of others' authority.** The recording indicator, or Listen's countdown, shows for exactly as long as the microphone is open, and kpclientd-android's **Apps** list shows every app the user has answered about.
 - **6. A protected channel to the agent.** The app's own notices use a frame that no message can draw, and message content is clipped to its bubble.
 - **9. Distinguishable, truthful appearances.** Names lose every default-ignorable character, those Unicode renders as nothing, and runs of whitespace (`src/text.rs`); names that look alike show 64 bits of the member's key, beyond a member's reach to match; a file's type is read from its bytes, not its name; and a saved file's name loses path separators and a leading dot.
 - **10. Clear consequences.** A dangerous button in a confirmation waits 0.7 s and the safe one has the focus. Every control ignores clicks until it has been still, and about the same message, for half a second, so an arriving message can't move a different control under the user's finger, and a row that comes to show another message can't take a click meant for the last one.

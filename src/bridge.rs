@@ -7,10 +7,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
-use pigeonhole_protocols::protocols::katzenqt1::engine::ChatId;
+use pigeonhole_protocols::protocols::katzenqt1::engine::{ChatId, parse_voucher_code, voucher_code};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::mpsc::UnboundedSender;
 use zeroize::Zeroizing;
@@ -20,6 +20,7 @@ use crate::contacts::Contacts;
 use crate::model::{self, Files};
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
+use crate::{fskv, sound};
 use crate::{
     Actions, AppState, AppWindow, AttachItem, ChatItem, Connection, LineItem, MemberItem, Overlay, Theme, ThemePreference, effects, text,
 };
@@ -90,6 +91,9 @@ struct App {
     recording_for: Option<ChatId>,
     /// Set to stop the webcam scan in progress.
     scanning: Option<Arc<AtomicBool>>,
+    /// Set to stop listening for a voucher by sound; and since when it listens.
+    listening: Option<(Arc<AtomicBool>, Instant)>,
+    sending_sound: bool,
     chat_model: Rc<VecModel<ChatItem>>,
     pending_model: Rc<VecModel<ChatItem>>,
     line_model: Rc<VecModel<LineItem>>,
@@ -182,6 +186,8 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         ticket: 0,
         recording_for: None,
         scanning: None,
+        listening: None,
+        sending_sound: false,
         chat_model,
         pending_model,
         line_model,
@@ -361,6 +367,15 @@ fn wire(ui: &AppWindow) {
     });
     a.on_stop_scan(|| {
         with_app(|app| app.stop_scan());
+    });
+    a.on_send_sound(|| {
+        with_app(|app| app.send_sound(UserIntent::new()));
+    });
+    a.on_listen(|| {
+        with_app(|app| app.listen(UserIntent::new()));
+    });
+    a.on_stop_listen(|| {
+        with_app(|app| app.stop_listen());
     });
     a.on_open_attach(|| {
         with_app(|app| app.open_attach(UserIntent::new()));
@@ -632,6 +647,81 @@ impl App {
         }
     }
 
+    /// Play the current voucher by sound, off this thread.
+    fn send_sound(&mut self, intent: UserIntent) {
+        let Some(v) = self.current_view().and_then(|v| parse_voucher_code(&v.code)) else { return };
+        if self.sending_sound {
+            return;
+        }
+        self.voice.stop_playing();
+        self.sending_sound = true;
+        self.state(|s| s.set_sending_sound(true));
+        self.effects.spawn(async move {
+            let v: [u8; fskv::PAYLOAD] = v.try_into().expect("32 bytes");
+            let r = tokio::task::spawn_blocking(move || sound::send(&intent, &v)).await.unwrap_or_else(|e| Err(e.to_string()));
+            later(move |app| {
+                app.sending_sound = false;
+                app.state(|s| s.set_sending_sound(false));
+                if let Err(e) = r {
+                    app.notice(&format!("Couldn't send it by sound: {e}"), true);
+                }
+            });
+        });
+    }
+
+    /// Listen for a voucher by sound, off this thread, into the field a pasted one goes in.
+    /// Pressed again, it stops.
+    fn listen(&mut self, intent: UserIntent) {
+        if self.listening.is_some() {
+            self.stop_listen();
+            return;
+        }
+        #[cfg(target_os = "android")]
+        if !crate::android::microphone_allowed(&intent) {
+            self.state(|s| s.set_sound_note("hushphone needs the microphone to listen. Allow it and choose Listen again.".into()));
+            return;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        self.listening = Some((stop.clone(), Instant::now()));
+        self.state(|s| {
+            s.set_scanned_code("".into());
+            s.set_listening(true);
+        });
+        self.tick();
+        self.effects.spawn(async move {
+            let mine = stop.clone();
+            let r = tokio::task::spawn_blocking(move || sound::listen(&intent, &stop)).await.unwrap_or_else(|e| Err(e.to_string()));
+            later(move |app| {
+                if !app.listening.as_ref().is_some_and(|(s, _)| Arc::ptr_eq(s, &mine)) {
+                    return;
+                }
+                app.listening = None;
+                let note = match r {
+                    Ok(Some(v)) => {
+                        app.state(|s| s.set_scanned_code(voucher_code(&v).into()));
+                        format!("Heard a voucher code, check {}. If their screen shows the same, choose Add member.", fskv::check(&v))
+                    }
+                    Ok(None) => String::new(),
+                    Err(e) => format!("Not heard: {e}. Hold the devices closer and choose Listen again."),
+                };
+                app.state(|s| {
+                    s.set_listening(false);
+                    s.set_sound_note(note.into());
+                });
+            });
+        });
+    }
+
+    fn stop_listen(&mut self) {
+        if let Some((stop, _)) = self.listening.take() {
+            stop.store(true, Ordering::Relaxed);
+        }
+        self.state(|s| {
+            s.set_listening(false);
+            s.set_sound_note("".into());
+        });
+    }
+
     /// Send the file `name` from the send directory to the current group; on Android, the
     /// file the system's picker hands over.
     fn attach(&mut self, intent: UserIntent, name: String) {
@@ -777,6 +867,7 @@ impl App {
         st.set_current_members(v.members.len() as i32);
         st.set_code(group_code(&v.code).into());
         st.set_code_qr(qr_image(&v.code));
+        st.set_code_check(parse_voucher_code(&v.code).map(|v| fskv::check(&v)).unwrap_or_default().into());
         st.set_minting(v.minting);
         st.set_joining_note(if v.joined { String::new() } else { model::joining_note(&c.lines) }.into());
         st.set_adding(v.adding);
@@ -852,6 +943,12 @@ impl App {
         self.timer.start(slint::TimerMode::Repeated, Duration::from_millis(100), || {
             with_app(|app| {
                 let mut busy = false;
+                if let Some((_, since)) = &app.listening {
+                    busy = true;
+                    let left = sound::LISTEN.saturating_sub(since.elapsed()).as_secs_f32().ceil();
+                    let note = format!("Listening… {left} s. Hold this device 10–30 cm from theirs while they choose Send by sound.");
+                    app.state(|s| s.set_sound_note(note.into()));
+                }
                 if let Some(d) = app.voice.recording() {
                     busy = true;
                     app.state(|s| s.set_record_time(voice::show_duration(d).into()));
