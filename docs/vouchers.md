@@ -33,6 +33,13 @@ Once minted, the group's page shows the voucher code, also as a QR code: any QR 
 as the code's text. Press **Copy code**, or let them scan it, and give it to a member of the group
 over a channel you trust. Then wait: nothing else is asked of you.
 
+With the member beside you, **Send by sound** plays the code to their device in 1.2 s, a T-Deck's
+too, as the T-Deck chat sends it: 64 tones between 1 and 5 kHz, quiet. The page shows 4 check
+digits, `check 1939` say; their screen shows the same 4 when it heard the code whole. Sound carries
+across a room, so send it only with nobody else near.
+
+![Send by sound, with the check digits both screens show](vouchers/send-by-sound.png)
+
 ![The voucher code, as a QR code and ready to copy](vouchers/voucher-code.png)
 
 When the member adds the code, the group's messages and members appear on your side, and the
@@ -46,6 +53,13 @@ press **Add member**. On Android, Scan opens the camera; it asks for the camera 
 Linux, Scan reads a screenshot of the code on the clipboard; or else, with a webcam, shows what it
 sees until you hold the code up to it (`--camera /dev/videoN` picks one; press Stop to give up); or
 else the newest picture of one in `~/hushphone/send`.
+
+Or press **Listen** and hold your device 10-30 cm from theirs while they choose **Send by sound**.
+hushphone listens for 15 s. When it hears the code, the field fills and the dialog shows its check
+digits: if their screen shows the same, press **Add member**. On Android, Listen asks for the
+microphone the first time.
+
+![Listening for a code sent by sound](vouchers/listen.png)
 
 ![Add a member: their voucher code, scanned](vouchers/invite-dialog.png)
 

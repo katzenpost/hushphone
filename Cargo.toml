@@ -27,9 +27,12 @@ pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protoco
 # one ThinClient type; back to crates.io once it is released.
 katzenpost_thin_client = { git = "https://github.com/katzenpost/thin_client", rev = "98ff985ad348156eccbe7d3f4c4849a47041f2d3" }
 rustic_audio = { git = "https://github.com/katzenpost/rustic_audio", rev = "5d0505b02708f63ba24c0d5f00c2b16124249228" }
+# The speaker and microphone for vouchers by sound: the cpal rustic_audio is built on.
+cpal = "0.17.3"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 futures-util = "0.3"
 sha2 = "0.10"
+sha3 = "0.10"
 hex = "0.4"
 serde = { version = "1", features = ["derive"] }
 toml = "1"

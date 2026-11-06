@@ -7,6 +7,7 @@ pub mod backend;
 pub mod bridge;
 pub mod contacts;
 pub mod effects;
+pub mod fskv;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod harden;
 pub mod keys;
@@ -17,6 +18,7 @@ pub mod radio;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod sandbox;
 pub mod settings;
+pub mod sound;
 pub mod text;
 pub mod voice;
 // The kernel structures it uses are laid out for 64-bit targets.
