@@ -220,3 +220,34 @@ fn wire_version_sets_the_voucher_form() {
         assert_eq!(boxes.iter().any(|b| b.starts_with(&compact)), v == 4, "version {v}: the compact form");
     }
 }
+
+/// A ping reaches the other member as a notice naming who pinged, which the app plays once, and
+/// is no line for the sender.
+#[test]
+fn ping_reaches_the_group() {
+    use hushphone::ping::Pings;
+    use pigeonhole_protocols::protocols::katzenqt1::engine::NoticeKind;
+    let w = World::default();
+    let mut alice = Peer::new(&w, "alice-ping");
+    let mut bob = Peer::new(&w, "bob-ping");
+    alice.cmd.send(Cmd::Create("friends".into(), 1)).unwrap();
+    alice.wait("the group", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| c.0.joined)));
+    let g = alice.made.clone().unwrap();
+    bob.cmd.send(Cmd::Join("friends".into(), 1)).unwrap();
+    bob.wait("a voucher code", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| !c.0.code.is_empty())));
+    let bg = bob.made.clone().unwrap();
+    alice.cmd.send(Cmd::Invite(g.clone(), bob.chat(&bg).0.code.clone())).unwrap();
+    bob.wait("bob to join", |p| p.chat(&bg).0.joined);
+
+    let mut pings = Pings::default();
+    assert!(pings.arrived(&bg, &bob.chat(&bg).1).is_empty());
+    alice.cmd.send(Cmd::Ping(g.clone())).unwrap();
+    alice.cmd.send(Cmd::Send(g.clone(), "after".into())).unwrap();
+    bob.wait("alice's ping", |p| p.chat(&bg).1.iter().any(|l| l.line.text == "after"));
+    let lines = &bob.chat(&bg).1;
+    let got: Vec<String> = pings.arrived(&bg, lines).into_iter().map(model::notice_text).collect();
+    assert_eq!(got, ["~alice-ping pinged"]);
+    assert!(pings.arrived(&bg, lines).is_empty(), "played once");
+    let alice_lines = &alice.chat(&g).1;
+    assert!(alice_lines.iter().all(|l| l.line.notice.as_ref().is_none_or(|n| n.kind != NoticeKind::Pinged)), "no line for the sender");
+}

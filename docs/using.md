@@ -11,6 +11,9 @@
   voice messages received from then on play by themselves, one at a time in the order they
   arrive, and you hold the big button to talk. A dot marks a voice message not yet played.
   Pressing the button again returns to the chat.
+- **Ping**, the bell in a group's header or Ctrl+P, plays a short tone on every member's device
+  and shows who pinged; you hear a roger beep. One ping every 3 seconds at most. It is a few
+  bytes, not a sound clip, so it suits slow links such as LoRa.
 - **Files.** On Linux, hushphone touches one directory of yours, `~/hushphone`. To send a file,
   put it in `~/hushphone/send` first, then press the paperclip and pick it there. Save puts a
   received file in `~/hushphone/received`, never over another. On Android, the paperclip and

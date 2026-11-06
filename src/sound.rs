@@ -19,15 +19,67 @@ const AMP: f32 = 9268.0;
 /// Play the voucher: 0.2 s of quiet while the speaker comes up, the 1.2 s frame, 0.3 s after.
 /// Returns once it has played.
 pub fn send(_: &UserIntent, voucher: &[u8; fskv::PAYLOAD]) -> Result<(), String> {
+    out(|fs| {
+        if fs % 25 != 0 {
+            return Err(format!("the speaker runs at {fs} Hz"));
+        }
+        let mut clip = vec![0f32; fs as usize / 5];
+        clip.extend(fskv::modulate(voucher, AMP, fs).iter().map(|&s| s as f32 / 32768.0));
+        clip.extend(vec![0f32; fs as usize * 3 / 10]);
+        Ok(clip)
+    })
+}
+
+/// Play a 16-bit mono PCM WAV, such as a ping sound. Returns once it has played.
+pub fn chime(wav: &[u8]) -> Result<(), String> {
+    let (rate, pcm) = wav_pcm(wav).ok_or("not a 16-bit mono WAV")?;
+    out(|fs| Ok(resample(&pcm, rate, fs)))
+}
+
+/// The rate and samples of a 16-bit mono PCM WAV.
+fn wav_pcm(b: &[u8]) -> Option<(u32, Vec<f32>)> {
+    if b.get(..4)? != b"RIFF" || b.get(8..12)? != b"WAVE" {
+        return None;
+    }
+    let (mut at, mut rate) = (12, None);
+    while at + 8 <= b.len() {
+        let len = u32::from_le_bytes(b[at + 4..at + 8].try_into().ok()?) as usize;
+        let body = b.get(at + 8..(at + 8).checked_add(len)?.min(b.len()))?;
+        match &b[at..at + 4] {
+            b"fmt " => {
+                let u16_at = |i: usize| Some(u16::from_le_bytes(body.get(i..i + 2)?.try_into().ok()?));
+                if u16_at(0)? != 1 || u16_at(2)? != 1 || u16_at(14)? != 16 {
+                    return None;
+                }
+                rate = Some(u32::from_le_bytes(body.get(4..8)?.try_into().ok()?));
+            }
+            b"data" => return Some((rate?, body.as_chunks::<2>().0.iter().map(|&s| i16::from_le_bytes(s) as f32 / 32768.0).collect())),
+            _ => {}
+        }
+        at += 8 + len + len % 2;
+    }
+    None
+}
+
+/// `x` at rate `from`, linearly interpolated to rate `to`.
+fn resample(x: &[f32], from: u32, to: u32) -> Vec<f32> {
+    let n = (x.len() as u64 * to as u64 / from.max(1) as u64) as usize;
+    (0..n)
+        .map(|i| {
+            let p = i as f64 * from as f64 / to as f64;
+            let (k, f) = (p as usize, (p.fract()) as f32);
+            let a = x.get(k).copied().unwrap_or(0.0);
+            a + (x.get(k + 1).copied().unwrap_or(a) - a) * f
+        })
+        .collect()
+}
+
+/// Play what `make` makes for the speaker's rate on the default speaker, and wait until it has.
+fn out(make: impl FnOnce(u32) -> Result<Vec<f32>, String>) -> Result<(), String> {
     let dev = cpal::default_host().default_output_device().ok_or("no speaker")?;
     let cfg = dev.default_output_config().map_err(|e| e.to_string())?;
     let (fs, format) = (cfg.sample_rate(), cfg.sample_format());
-    if fs % 25 != 0 {
-        return Err(format!("the speaker runs at {fs} Hz"));
-    }
-    let mut clip = vec![0f32; fs as usize / 5];
-    clip.extend(fskv::modulate(voucher, AMP, fs).iter().map(|&s| s as f32 / 32768.0));
-    clip.extend(vec![0f32; fs as usize * 3 / 10]);
+    let clip = make(fs)?;
     let (clip, at) = (Arc::new(clip), Arc::new(AtomicUsize::new(0)));
     let cfg = cfg.config();
     let stream = match format {
@@ -127,4 +179,22 @@ where
         None,
     )
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ping_sounds_read_and_resample() {
+        for w in [crate::ping::SENT, crate::ping::RECEIVED] {
+            let (rate, pcm) = wav_pcm(w).unwrap();
+            assert_eq!(rate, 16000);
+            assert!(pcm.len() > 1000 && pcm.iter().any(|&s| s.abs() > 0.05));
+            assert_eq!(resample(&pcm, 16000, 48000).len(), pcm.len() * 3);
+        }
+        assert_eq!(resample(&[0.0, 1.0], 1, 2), [0.0, 0.5, 1.0, 1.0]);
+        assert!(wav_pcm(b"RIFF\0\0\0\0WAVE").is_none());
+        assert!(wav_pcm(&crate::ping::SENT[..40]).is_none(), "cut short");
+    }
 }

@@ -18,6 +18,7 @@ use zeroize::Zeroizing;
 use crate::backend::{self, Attachments, Cmd, Keys, Link, Source, Update};
 use crate::contacts::Contacts;
 use crate::model::{self, Files};
+use crate::ping::{self, Pings};
 use crate::radio::Radio;
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
@@ -87,6 +88,7 @@ struct App {
     expanded: HashSet<usize>,
     voice: Voice,
     radio: Radio,
+    pings: Pings,
     /// What the user picked last: a result for an older pick does not move the selection.
     ticket: u64,
     /// Which group a recording in progress is for.
@@ -186,6 +188,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         expanded: HashSet::new(),
         voice,
         radio: Radio::default(),
+        pings: Pings::default(),
         ticket: 0,
         recording_for: None,
         scanning: None,
@@ -392,6 +395,9 @@ fn wire(ui: &AppWindow) {
     a.on_toggle_voice(|line| {
         with_app(|app| app.toggle_voice(line as usize));
     });
+    a.on_ping(|| {
+        with_app(|app| app.ping());
+    });
     a.on_toggle_radio(|| {
         with_app(|app| app.toggle_radio());
     });
@@ -542,11 +548,18 @@ impl App {
                 }
                 let files = &self.files;
                 self.radio.arrived(&id, &c.lines, |a| files.types.contains_key(&a.file));
+                let pinged = self.pings.arrived(&id, &c.lines).last().map(|n| {
+                    format!("{} in {}", model::notice_text(n), c.view.as_ref().map(|v| text::name(&v.name)).unwrap_or_default())
+                });
                 if self.current.as_deref() == Some(id.as_str()) {
                     c.seen = c.lines.last().map_or(0, |l| l.line.id);
                     self.remember_seen(&id);
                 }
                 self.pump();
+                if let Some(who) = pinged {
+                    self.notice(&who, false);
+                    self.chime(ping::RECEIVED);
+                }
                 self.render_chats();
                 if self.current.as_deref() == Some(id.as_str()) {
                     self.render_current();
@@ -949,6 +962,25 @@ impl App {
         {
             self.play(&chat, line);
         }
+    }
+
+    /// Ask the current group's members to play their ping sound, at most once every few seconds.
+    fn ping(&mut self) {
+        let Some(chat) = self.current.clone() else { return };
+        if !self.joined(&chat) || !self.pings.may_send(Instant::now()) {
+            return;
+        }
+        self.send(Cmd::Ping(chat));
+        self.chime(ping::SENT);
+    }
+
+    /// Play a ping sound, off this thread.
+    fn chime(&self, wav: &'static [u8]) {
+        self.effects.spawn(async move {
+            if let Ok(Err(e)) = tokio::task::spawn_blocking(move || sound::chime(wav)).await {
+                eprintln!("hushphone: ping sound: {e}");
+            }
+        });
     }
 
     fn toggle_radio(&mut self) {
