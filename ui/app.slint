@@ -279,8 +279,9 @@ component Sidebar inherits Rectangle {
 // Hold to talk. Releasing sends; pressing Escape or dragging well away cancels. Space works the
 // same while the button has keyboard focus.
 component PttButton {
-    width: 48px;
-    height: 48px;
+    in property <length> size: 48px;
+    width: size;
+    height: size;
     accessible-role: button;
     accessible-label: AppState.recording ? "Recording: release to send" : "Hold to record a voice message";
     forward-focus: fs;
@@ -304,7 +305,7 @@ component PttButton {
     Icon {
         icon: @image-url("icons/mic.svg");
         tint: AppState.recording ? #ffffff : Theme.text-muted;
-        size: 22px;
+        size: root.size * 0.46;
     }
 
     touch := TouchArea {
@@ -359,6 +360,117 @@ component PttButton {
                 return accept;
             }
             reject
+        }
+    }
+}
+
+// Radio mode: the group as a channel on a display, a speaker, and a big talk button.
+component RadioPanel inherits Rectangle {
+    background: Theme.bg;
+    private property <bool> tx: AppState.recording;
+    private property <bool> rx: AppState.radio-receiving && !tx;
+
+    Rectangle {
+        width: min(parent.width - 2 * Theme.s4, 420px);
+        height: min(parent.height - 2 * Theme.s4, 600px);
+        border-radius: 28px;
+        background: Theme.faceplate;
+        border-width: 2px;
+        border-color: Theme.faceplate-edge;
+
+        VerticalLayout {
+            padding: Theme.s5;
+            spacing: Theme.s4;
+
+            // The display.
+            Rectangle {
+                height: 132px;
+                border-radius: Theme.radius;
+                background: Theme.lcd;
+                border-width: 4px;
+                border-color: Theme.faceplate-edge;
+                accessible-role: text;
+                accessible-label: "Channel " + AppState.current-name + ": "
+                    + (tx ? "talking" : rx ? AppState.radio-talker + " talking" : "standby");
+                VerticalLayout {
+                    padding: Theme.s3;
+                    padding-left: Theme.s4;
+                    padding-right: Theme.s4;
+                    spacing: Theme.s1;
+                    HorizontalLayout {
+                        spacing: Theme.s2;
+                        Text { text: "CH"; color: Theme.lcd-ink; font-family: "monospace"; font-size: Theme.fs-small; vertical-alignment: center; }
+                        Text {
+                            text: AppState.current-name;
+                            color: Theme.lcd-ink;
+                            font-family: "monospace";
+                            font-size: Theme.fs-heading;
+                            font-weight: 700;
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: Theme.s2;
+                        Text {
+                            text: tx ? "TX" : rx ? "RX" : "--";
+                            color: Theme.lcd-ink;
+                            font-family: "monospace";
+                            font-weight: 700;
+                        }
+                        Text {
+                            text: tx ? "you  " + AppState.record-time : rx ? AppState.radio-talker : "standby";
+                            color: tx || rx ? Theme.lcd-ink : Theme.lcd-dim;
+                            font-family: "monospace";
+                            overflow: elide;
+                            horizontal-stretch: 1;
+                        }
+                    }
+                    // Activity, not the audio's own level: bars that move while a clip plays or the microphone is open.
+                    HorizontalLayout {
+                        spacing: 3px;
+                        height: 28px;
+                        for i in 24: Rectangle {
+                            Rectangle {
+                                y: parent.height - self.height;
+                                height: !(tx || rx) ? 3px
+                                    : parent.height * (0.15 + 0.85 * abs(sin(animation-tick() / 900ms * 360deg + i * 47deg) * sin(animation-tick() / 340ms * 360deg + i * 23deg)));
+                                background: tx || rx ? Theme.lcd-ink : Theme.lcd-dim;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The speaker.
+            grille := Rectangle {
+                min-height: 72px;
+                max-height: 220px;
+                vertical-stretch: 1;
+                border-radius: Theme.radius;
+                background: Theme.grille;
+                clip: true;
+                private property <int> cols: max(1, floor((self.width - 12px) / 14px));
+                for i in 480: Rectangle {
+                    x: 6px + mod(i, grille.cols) * 14px + (mod(floor(i / grille.cols), 2) == 1 ? 7px : 0px);
+                    y: 6px + floor(i / grille.cols) * 12px;
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: Theme.faceplate-edge;
+                }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                PttButton { size: 112px; }
+            }
+            Text {
+                text: AppState.recording ? "release to send to " + AppState.current-name : "hold to talk";
+                color: Theme.faceplate-text;
+                font-size: Theme.fs-small;
+                horizontal-alignment: center;
+            }
         }
     }
 }
@@ -678,6 +790,14 @@ component Conversation inherits Rectangle {
                 }
                 if AppState.current-joined: IconButton {
                     y: (parent.height - self.height) / 2;
+                    icon: @image-url("icons/radio.svg");
+                    label: AppState.current-radio ? "Radio on: voice messages play as they arrive" : "Radio off: voice messages wait to be played";
+                    tint: AppState.current-radio ? Theme.accent : Theme.text-muted;
+                    tint-active: AppState.current-radio ? Theme.accent-hover : Theme.text;
+                    activated => { Actions.toggle-radio(); }
+                }
+                if AppState.current-joined: IconButton {
+                    y: (parent.height - self.height) / 2;
                     icon: @image-url("icons/users.svg");
                     label: "Members of " + AppState.current-name;
                     activated => { root.members(); }
@@ -697,7 +817,9 @@ component Conversation inherits Rectangle {
             cancel => { root.leave(); }
         }
 
-        if AppState.current-joined: messages := ListView {
+        if AppState.current-joined && AppState.current-radio: RadioPanel { vertical-stretch: 1; }
+
+        if AppState.current-joined && !AppState.current-radio: messages := ListView {
             vertical-stretch: 1;
             // Follow new lines while the reader is at the bottom; leave them be if they scrolled up.
             private property <bool> at-bottom: true;
@@ -719,7 +841,7 @@ component Conversation inherits Rectangle {
             }
         }
 
-        if AppState.current-joined: Composer { }
+        if AppState.current-joined && !AppState.current-radio: Composer { }
     }
 
     more := PopupWindow {

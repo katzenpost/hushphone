@@ -13,6 +13,7 @@ pub mod keys;
 pub mod mesh;
 pub mod model;
 pub mod qr;
+pub mod radio;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod sandbox;
 pub mod settings;

@@ -2,7 +2,7 @@
 //! last line read in each group. Member keys are a contact list, so this lives with the state,
 //! sealed under its key when the state is.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,12 @@ pub struct Contacts {
     pub petnames: BTreeMap<String, String>,
     /// The last line read in each group, so unread counts survive a restart.
     pub seen: BTreeMap<String, usize>,
+    /// The groups in radio mode.
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub radio: BTreeSet<String>,
+    /// The received voice clips played, by group.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub played: BTreeMap<String, BTreeSet<usize>>,
 }
 
 impl Contacts {
@@ -72,6 +78,8 @@ mod tests {
         let mut c = Contacts::default();
         c.set_petname("0a0b", "Bob (work)");
         c.seen.insert("g".into(), 7);
+        c.radio.insert("g".into());
+        c.played.entry("g".into()).or_default().insert(3);
         c
     }
 
