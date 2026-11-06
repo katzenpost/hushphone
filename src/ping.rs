@@ -32,7 +32,7 @@ impl Pings {
         true
     }
 
-    /// The pings that arrived in `chat` since last time.
+    /// The pings, and the messages this app cannot show, that arrived in `chat` since last time.
     pub fn arrived<'a>(&mut self, chat: &str, lines: &'a [LineView]) -> Vec<&'a Notice> {
         let last = lines.last().map_or(0, |l| l.line.id);
         let Some(from) = self.seen.insert(chat.to_string(), last) else { return Vec::new() };
@@ -40,7 +40,7 @@ impl Pings {
             .iter()
             .filter(|l| l.line.id > from)
             .filter_map(|l| l.line.notice.as_ref())
-            .filter(|n| n.kind == NoticeKind::Pinged)
+            .filter(|n| matches!(n.kind, NoticeKind::Pinged | NoticeKind::Unsupported))
             .collect()
     }
 }
@@ -76,6 +76,10 @@ mod tests {
         assert_eq!(got, ["~m3", "~m5"]);
         assert!(p.arrived("g", &lines).is_empty(), "each once");
         assert!(p.arrived("h", &lines).is_empty(), "groups apart");
+        let mut unsupported = line(6, false);
+        unsupported.line.notice = Some(Notice { kind: NoticeKind::Unsupported, args: vec![] });
+        lines.push(unsupported);
+        assert_eq!(p.arrived("g", &lines)[0].kind, NoticeKind::Unsupported, "a message this app cannot show");
     }
 
     #[test]
