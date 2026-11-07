@@ -6,7 +6,7 @@ Install the `arm64-v8a` APKs (`x86_64` for an emulator) of
 when kpclientd-android asks.
 
 hushphone on Android reaches Pigeonhole over the mixnet (the default) or over a Reticulum mesh,
-through Reticulum-rs, with no other app; pick one under Transport in Settings. The mesh needs a
+through berlinmesh/reticulum, with no other app; pick one under Transport in Settings. The mesh needs a
 replica's address, namenlos's bridge `162.220.11.225:4242` unless you give another. A new
 transport, or a new replica, is used the next time hushphone starts.
 

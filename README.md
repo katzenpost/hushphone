@@ -30,7 +30,7 @@ or the mesh (see [docs/android.md](docs/android.md)).
 ## Transports
 
 - `mixnet` (default): the Katzenpost mixnet, Needs a running kpclientd (desktop: from katzenpost; Android: [kpclientd-android](https://github.com/katzenpost/kpclientd-android)).
-- `reticulum`: a Reticulum mesh, in pure Rust (Reticulum-rs). Needs nothing else installed, no kpclientd. On Android too.
+- `reticulum`: a Reticulum mesh, in pure Rust (berlinmesh/reticulum). Needs nothing else installed, no kpclientd. On Android too.
 - `reticulum-py`: the same mesh through the Python RNS, embedded in the Rust binary with PyO3. Build with `--features reticulum-py`. No kpclientd.
 
 ## Links

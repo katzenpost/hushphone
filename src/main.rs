@@ -8,7 +8,7 @@ const USAGE: &str = "usage: hushphone [--transport mixnet|reticulum|reticulum-py
                  [--data DIR] [--files DIR] [--name NAME] [--wire-version 3|4] [--camera DEVICE]
 
   --transport T     how Pigeonhole is reached: mixnet, the Katzenpost mixnet through kpclientd
-                    (default); reticulum, a Reticulum mesh through Reticulum-rs; or reticulum-py,
+                    (default); reticulum, a Reticulum mesh in pure Rust; or reticulum-py,
                     the mesh through the Python RNS, embedded (built with --features reticulum-py)
   --daemon ADDRESS  mixnet: kpclientd's thin client socket: @name, a path, or host:port (default @katzenpost)
   --replica HOST:PORT  reticulum, reticulum-py: a replica's Reticulum TCP interface, reached over one

@@ -32,7 +32,7 @@ pub enum Source {
     SimSocket(PathBuf),
     /// An in-memory Pigeonhole shared by the clients of this process.
     Memory(World),
-    /// A Reticulum mesh through Reticulum-rs: a replica's Reticulum TCP interface, `host:port`,
+    /// A Reticulum mesh in pure Rust: a replica's Reticulum TCP interface, `host:port`,
     /// and the box size.
     Mesh(String, usize),
     /// A Reticulum mesh through the Python RNS, embedded: the Reticulum config directory and the
@@ -400,7 +400,7 @@ async fn mesh<B: Backend>(
             tell(Update::Link(Link::Online));
             serve(cfg, b, None, att, rx, tell).await;
         }
-        // Not retried: Python's Reticulum starts once per process, and Reticulum-rs keeps trying
+        // Not retried: Python's Reticulum starts once per process, and the Rust Reticulum keeps trying
         // its TCP link by itself.
         Err(e) => {
             eprintln!("hushphone: can't reach a replica on the mesh: {e}");

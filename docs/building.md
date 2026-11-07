@@ -43,7 +43,7 @@ the same on all three.
 | | `mixnet` (default) | `reticulum` | `reticulum-py` |
 |---|---|---|---|
 | Network | the Katzenpost mixnet | a Reticulum mesh | a Reticulum mesh |
-| Through | kpclientd, over its thin client socket | [Reticulum-rs](https://github.com/BeechatNetworkSystemsLtd/Reticulum-rs), in hushphone's own process | the official Python [RNS](https://github.com/markqvist/Reticulum), in hushphone's own process |
+| Through | kpclientd, over its thin client socket | [berlinmesh/reticulum](https://git.emcomm.cc/berlinmesh/reticulum), in hushphone's own process | the official Python [RNS](https://github.com/markqvist/Reticulum), in hushphone's own process |
 | Build | default | default | `--features reticulum-py`, and `python3-dev` |
 | Needs at run time | a running kpclientd | a replica's address | a replica's address or a Reticulum config, and the Python packages below |
 | Platforms | Linux, Android | Linux | Linux |
@@ -76,7 +76,7 @@ sudo apt install python3-dev python3-venv
 python3 -m venv ~/.venvs/hushphone
 ~/.venvs/hushphone/bin/pip install rns \
     "hpqc @ git+https://github.com/katzenpost/hpqc@4732d7fb7e6328407f69a5cea0dfb5e9eca308f7#subdirectory=py" \
-    "pigeonhole_protocols @ git+https://github.com/katzenpost/pigeonhole_protocols@91680fc33c6a8073d441b774f94bdcee927b45ce#subdirectory=py" \
+    "pigeonhole_protocols @ git+https://github.com/katzenpost/pigeonhole_protocols@3264448de0ec01ecd0adc70bf4a6150e8e58ed6e#subdirectory=py" \
     "pigeonhole_rns @ git+https://github.com/katzenpost/pigeonhole_rns"
 VIRTUAL_ENV=~/.venvs/hushphone cargo run --release --features reticulum-py -- \
     --transport reticulum-py --replica 162.220.11.225:4242
