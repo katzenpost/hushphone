@@ -69,14 +69,14 @@ a Python program: hushphone stays one Rust binary, which embeds CPython through
 `pigeonhole_rns`, `pigeonhole_protocols` and `hpqc` in-process. Pick it to run against the same
 RNS as the rest of your Reticulum programs, or to use an existing Reticulum config, with all its
 interfaces, through `--rns-config DIR`. The packages are looked for in the virtual environment
-`VIRTUAL_ENV` names, or system-wide; compact vouchers need hpqc's `katzenqt1-v4` branch:
+`VIRTUAL_ENV` names, or system-wide; pinned to the commits hushphone builds on:
 
 ```sh
 sudo apt install python3-dev python3-venv
 python3 -m venv ~/.venvs/hushphone
 ~/.venvs/hushphone/bin/pip install rns \
-    "hpqc @ git+https://github.com/katzenpost/hpqc@katzenqt1-v4#subdirectory=py" \
-    "pigeonhole_protocols @ git+https://github.com/katzenpost/pigeonhole_protocols#subdirectory=py" \
+    "hpqc @ git+https://github.com/katzenpost/hpqc@4732d7fb7e6328407f69a5cea0dfb5e9eca308f7#subdirectory=py" \
+    "pigeonhole_protocols @ git+https://github.com/katzenpost/pigeonhole_protocols@91680fc33c6a8073d441b774f94bdcee927b45ce#subdirectory=py" \
     "pigeonhole_rns @ git+https://github.com/katzenpost/pigeonhole_rns"
 VIRTUAL_ENV=~/.venvs/hushphone cargo run --release --features reticulum-py -- \
     --transport reticulum-py --replica 162.220.11.225:4242
