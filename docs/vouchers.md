@@ -33,8 +33,9 @@ Once minted, the group's page shows the voucher code, also as a QR code: any QR 
 as the code's text. Press **Copy code**, or let them scan it, and give it to a member of the group
 over a channel you trust. Then wait: nothing else is asked of you.
 
-With the member beside you, **Send by sound** plays the code to their device in 1.2 s, a T-Deck's
-too, as the T-Deck chat sends it: 64 tones between 1 and 5 kHz, quiet. The page shows 4 check
+With the member beside you, **Send by sound** plays the code to their device in 2.7 s, a T-Deck's
+too, as the T-Deck chat sends it: [ggwave](https://github.com/ggerganov/ggwave)'s Audible Fast,
+tones between 1.9 and 6.3 kHz, quiet. The page shows 4 check
 digits, `check 1939` say; their screen shows the same 4 when it heard the code whole. Sound carries
 across a room, so send it only with nobody else near.
 
