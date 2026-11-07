@@ -22,7 +22,7 @@ use crate::ping::{self, Pings};
 use crate::radio::Radio;
 use crate::settings::{Settings, ThemeChoice};
 use crate::voice::{self, Voice};
-use crate::{fskv, sound};
+use crate::sound;
 use crate::{
     Actions, AppState, AppWindow, AttachItem, ChatItem, Connection, LineItem, MemberItem, Overlay, Theme, ThemePreference, effects, text,
 };
@@ -690,7 +690,7 @@ impl App {
         self.sending_sound = true;
         self.state(|s| s.set_sending_sound(true));
         self.effects.spawn(async move {
-            let v: [u8; fskv::PAYLOAD] = v.try_into().expect("32 bytes");
+            let v: [u8; sound::PAYLOAD] = v.try_into().expect("32 bytes");
             let r = tokio::task::spawn_blocking(move || sound::send(&intent, &v)).await.unwrap_or_else(|e| Err(e.to_string()));
             later(move |app| {
                 app.sending_sound = false;
@@ -732,7 +732,7 @@ impl App {
                 let note = match r {
                     Ok(Some(v)) => {
                         app.state(|s| s.set_scanned_code(voucher_code(&v).into()));
-                        format!("Heard a voucher code, check {}. If their screen shows the same, choose Add member.", fskv::check(&v))
+                        format!("Heard a voucher code, check {}. If their screen shows the same, choose Add member.", sound::check(&v))
                     }
                     Ok(None) => String::new(),
                     Err(e) => format!("Not heard: {e}. Hold the devices closer and choose Listen again."),
@@ -908,7 +908,7 @@ impl App {
         st.set_current_members(v.members.len() as i32);
         st.set_code(group_code(&v.code).into());
         st.set_code_qr(qr_image(&v.code));
-        st.set_code_check(parse_voucher_code(&v.code).map(|v| fskv::check(&v)).unwrap_or_default().into());
+        st.set_code_check(parse_voucher_code(&v.code).map(|v| sound::check(&v)).unwrap_or_default().into());
         st.set_minting(v.minting);
         st.set_joining_note(if v.joined { String::new() } else { model::joining_note(&c.lines) }.into());
         st.set_adding(v.adding);

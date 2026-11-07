@@ -7,7 +7,6 @@ pub mod backend;
 pub mod bridge;
 pub mod contacts;
 pub mod effects;
-pub mod fskv;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod harden;
 pub mod keys;
