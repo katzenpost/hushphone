@@ -122,6 +122,9 @@ export global AppState {
     in property <string> files-dir;
     // What is in the send directory, when asked.
     in property <[AttachItem]> attachable;
+    // A picture picked to send, made smaller: its name and "286 KB → 54 KB".
+    in property <string> picture-name;
+    in property <string> picture-sizes;
 }
 
 // What the UI asks of the host.
@@ -135,6 +138,9 @@ export global Actions {
     callback open-attach();
     // Send the file of that name from the send directory.
     callback attach-file(string);
+    // Send the picture picked: made smaller, or the original as it is; or drop it.
+    callback send-picture(bool);
+    callback drop-picture();
     callback ptt-start();
     callback ptt-stop();
     callback ptt-cancel();

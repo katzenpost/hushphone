@@ -1167,6 +1167,21 @@ component AttachDialog inherits Dialog {
     }
 }
 
+// A picture is sent smaller and without its metadata unless the user asks for the original.
+component PictureDialog inherits Dialog {
+    callback send(bool);
+    Hint { text: AppState.picture-sizes; font-size: Theme.fs-body; }
+    Hint { text: AppState.picture-name + " is made smaller to send faster, and without its location, camera or time. Send the original when every pixel matters."; }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.s2;
+        Button { text: "Cancel"; activated => { root.dismissed(); } }
+        Button { text: "Send original"; activated => { root.send(true); } }
+        send := Button { text: "Send"; primary: true; activated => { root.send(false); } }
+    }
+    init => { send.focus(); }
+}
+
 component SettingsDialog inherits Dialog {
     in-out property <string> daemon: AppState.daemon;
     in-out property <bool> use-mesh: AppState.use-mesh;
@@ -1236,7 +1251,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, confirm-leave, confirm-clear, confirm-remove }
+export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, confirm-leave, confirm-clear, confirm-remove }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1448,6 +1463,17 @@ export component AppWindow inherits Window {
                 dismissed => { root.overlay = Overlay.none; }
                 send-file(name) => {
                     Actions.attach-file(name);
+                    root.overlay = Overlay.none;
+                }
+            }
+            if root.overlay == Overlay.picture: PictureDialog {
+                title: "Send a picture to " + AppState.current-name;
+                dismissed => {
+                    Actions.drop-picture();
+                    root.overlay = Overlay.none;
+                }
+                send(original) => {
+                    Actions.send-picture(original);
                     root.overlay = Overlay.none;
                 }
             }

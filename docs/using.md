@@ -18,6 +18,10 @@
   put it in `~/hushphone/send` first, then press the paperclip and pick it there. Save puts a
   received file in `~/hushphone/received`, never over another. On Android, the paperclip and
   Save open the system's document picker, which hands hushphone that one file.
+- **Pictures** you send (PNG, JPEG or WebP over 20 KB) are made smaller first: at most 1600 pixels
+  on the longest side, as a JPEG, turned upright, with transparency shown white and without their
+  metadata (location, camera, time). hushphone shows both sizes, such as 286 KB → 54 KB, and
+  Send original sends the file untouched. Animations are always sent as they are.
 - **Marks** on your messages: a clock while queued, ✓ once written to the replicas, ✓✓ once a
   member has acknowledged reading them.
 - **F10** hides the window's contents at once.
