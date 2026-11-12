@@ -964,7 +964,12 @@ impl App {
         st.set_code_qr(qr_image(&v.code));
         st.set_code_check(parse_voucher_code(&v.code).map(|v| sound::check(&v)).unwrap_or_default().into());
         st.set_minting(v.minting);
-        st.set_joining_note(if v.joined { String::new() } else { model::joining_note(&c.lines) }.into());
+        let mut note = if v.joined { String::new() } else { model::joining_note(&c.lines) };
+        if !note.is_empty() && !v.minting {
+            // The engine waits for the reply again on its own, 5 s after a failure, doubling to 5 min 20 s.
+            note += ". hushphone keeps waiting for the reply and tries again on its own, at most 5 minutes apart.";
+        }
+        st.set_joining_note(note.into());
         st.set_adding(v.adding);
         sync(&self.line_model, items);
         sync(&self.member_model, model::member_items(v, &who));
