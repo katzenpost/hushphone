@@ -38,7 +38,7 @@ release-android:
 	done
 
 # A development APK for one ABI (default x86_64, for an emulator), signed with the debug key;
-# FEATURES=test-screenshots lets screenshots see its window.
+# Screen security is off by default, so screenshots see its window.
 ABI ?= x86_64
 TARGET_$(ABI) = $(if $(filter arm64-v8a,$(ABI)),aarch64-linux-android,x86_64-linux-android)
 apk:

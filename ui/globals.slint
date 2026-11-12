@@ -81,6 +81,8 @@ export global AppState {
     // The transport saved, for the next start.
     in property <bool> use-mesh;
     in property <string> replica;
+    // Android: the Screen security setting, FLAG_SECURE on hushphone's windows.
+    in property <bool> screen-security;
     in property <string> my-name;
     in-out property <string> current;
     in property <string> current-name;
@@ -158,7 +160,7 @@ export global Actions {
     callback scan();
     callback remove-member(string);
     callback set-petname(string, string);
-    callback save-settings(string, bool, string);
+    callback save-settings(string, bool, string, bool);
     callback choose-name(string);
     callback dismiss-notice();
 }

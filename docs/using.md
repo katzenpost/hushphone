@@ -22,3 +22,5 @@
   member has acknowledged reading them.
 - **F10** hides the window's contents at once.
 - **Theme** follows the system, and is dark when the system does not say. Settings can fix it to light or dark.
+- **Screen security**, on Android, is off unless you turn it on in Settings; when on, hushphone's
+  screens are hidden from screenshots, screen recordings and the recent-apps preview.

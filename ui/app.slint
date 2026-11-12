@@ -1,4 +1,4 @@
-import { ListView, LineEdit, ComboBox, Spinner, Palette } from "std-widgets.slint";
+import { ListView, LineEdit, ComboBox, Spinner, Palette, Switch } from "std-widgets.slint";
 import { Theme, ThemePreference } from "theme.slint";
 import { AppState, Actions, Clock, ChatItem, LineItem, MemberItem, Connection, LineKind, Delivery } from "globals.slint";
 import { Stable, Icon, IconButton, Button, Avatar, Badge } from "components/controls.slint";
@@ -1171,6 +1171,7 @@ component SettingsDialog inherits Dialog {
     in-out property <string> daemon: AppState.daemon;
     in-out property <bool> use-mesh: AppState.use-mesh;
     in-out property <string> replica: AppState.replica;
+    in-out property <bool> screen-security: AppState.screen-security;
     panel-width: 460px;
     GridLayout {
         spacing: Theme.s3;
@@ -1210,7 +1211,13 @@ component SettingsDialog inherits Dialog {
                 }
             }
         }
+        // Only Android has FLAG_SECURE; choose-transport is true there alone.
+        if AppState.choose-transport: Row {
+            FieldLabel { text: "Screen security"; vertical-alignment: center; }
+            Switch { checked <=> root.screen-security; }
+        }
     }
+    if AppState.choose-transport: Hint { text: "With Screen security on, hushphone's screens are hidden from screenshots, screen recordings and the recent-apps preview."; }
     if AppState.choose-transport: Hint { text: "Members see the name you chose when hushphone first started. A new transport or replica is used the next time hushphone starts. Press F10 to hide the window's contents at once."; }
     if !AppState.choose-transport: Hint { text: "Members see the name you chose when hushphone first started. A new daemon address is used the next time hushphone starts; a host:port address carries every key and message to that host unprotected, so use one only on this machine. Press F10 to hide the window's contents at once."; }
     if AppState.files-dir != "": Hint { text: "Files to send go in " + AppState.files-dir + "/send; files you save land in " + AppState.files-dir + "/received. hushphone reads and writes no other files of yours."; }
@@ -1222,7 +1229,7 @@ component SettingsDialog inherits Dialog {
             text: "Save";
             primary: true;
             activated => {
-                Actions.save-settings(root.daemon, root.use-mesh, root.replica);
+                Actions.save-settings(root.daemon, root.use-mesh, root.replica, root.screen-security);
                 root.dismissed();
             }
         }
