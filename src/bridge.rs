@@ -162,6 +162,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     st.set_choose_transport(cfg!(target_os = "android"));
     st.set_use_mesh(settings.transport == "reticulum");
     st.set_replica(settings.replica().into());
+    st.set_screen_security(settings.screen_security);
     st.set_my_name(settings.name.clone().into());
     ui.global::<Theme>().set_preference(match settings.theme {
         ThemeChoice::System => ThemePreference::System,
@@ -303,7 +304,7 @@ fn wire(ui: &AppWindow) {
             app.render_all();
         });
     });
-    a.on_save_settings(|daemon, mesh, replica| {
+    a.on_save_settings(|daemon, mesh, replica, secure| {
         with_app(|app| {
             app.settings.daemon = daemon.trim().to_string();
             if cfg!(target_os = "android") {
@@ -314,9 +315,13 @@ fn wire(ui: &AppWindow) {
                 }
                 app.settings.transport = if mesh { "reticulum" } else { "" }.into();
                 app.settings.replica = replica.into();
+                app.settings.screen_security = secure;
+                #[cfg(target_os = "android")]
+                crate::android::set_screen_security(secure);
                 app.state(|s| {
                     s.set_use_mesh(mesh);
                     s.set_replica(replica.into());
+                    s.set_screen_security(secure);
                 });
                 let now = match &app.setup.source {
                     Source::Mesh(a, _) => Some(a.as_str()),

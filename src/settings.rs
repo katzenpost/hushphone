@@ -32,6 +32,9 @@ pub struct Settings {
     /// The katzenqt1 wire version written and minted, 3 or 4; 4 when unset.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wire_version: Option<u64>,
+    /// Android: keep hushphone's screens out of screenshots, screen recordings and the
+    /// recent-apps preview. Opt-in: off when unset.
+    pub screen_security: bool,
     /// Where an older version kept petnames; moved into the sealed contacts at start and
     /// emptied.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -112,7 +115,11 @@ mod tests {
         let s = Settings { transport: "reticulum".into(), replica: "10.0.0.1:4242".into(), ..s };
         s.save(dir.path()).unwrap();
         assert_eq!(Settings::load(dir.path()).0.replica(), "10.0.0.1:4242");
-        assert_eq!(Settings::load(dir.path()), (s, None));
+        assert_eq!(Settings::load(dir.path()), (s.clone(), None));
+        assert!(!s.screen_security, "screenshots are allowed unless the user opts in");
+        let s = Settings { screen_security: true, ..s };
+        s.save(dir.path()).unwrap();
+        assert!(Settings::load(dir.path()).0.screen_security);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

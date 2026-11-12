@@ -10,7 +10,7 @@ description = "Group chat over the Katzenpost mixnet, for Linux and Android"
 crate-type = ["rlib", "cdylib"]
 
 [features]
-# For test builds only: lets Android screenshots and screen recording see the window.
+# Kept so older build commands work; it changes nothing now that Screen security is opt-in.
 test-screenshots = []
 # The mesh's second transport, `--rns python`: the official Python RNS, embedded through PyO3.
 reticulum-py = ["pigeonhole_protocols/reticulum-py"]

@@ -7,6 +7,7 @@ use slint::android::android_activity::WindowManagerFlags;
 
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
@@ -22,16 +23,24 @@ const RECORD_AUDIO: &str = "android.permission.RECORD_AUDIO";
 
 /// The app, for its activity: a permission request needs the activity, not the application.
 static APP: OnceLock<AndroidApp> = OnceLock::new();
+/// The user's Screen security setting, for the windows opened after it was set.
+static SECURE: AtomicBool = AtomicBool::new(false);
+
+/// Keep every window out of screenshots, screen recording and the recent-apps thumbnails, or
+/// let them in. The platform applies it on the UI thread, so it may be called from any.
+pub fn set_screen_security(on: bool) {
+    SECURE.store(on, Ordering::Relaxed);
+    if let Some(app) = APP.get() {
+        let s = WindowManagerFlags::SECURE;
+        let none = WindowManagerFlags::empty();
+        if on { app.set_window_flags(s, none) } else { app.set_window_flags(none, s) }
+    }
+}
 
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     crate::harden::process();
     let _ = APP.set(app.clone());
-    // Keep every window out of screenshots, screen recording and the recent-apps thumbnails.
-    // Only test builds, made to take screenshots of, leave this out.
-    if !cfg!(feature = "test-screenshots") {
-        app.set_window_flags(WindowManagerFlags::SECURE, WindowManagerFlags::empty());
-    }
     let data = private_dir(&app);
     slint::android::init(app).expect("Slint on Android");
     // On the mixnet, the thin client dials a unix socket in the app's private directory, where
@@ -43,6 +52,8 @@ fn android_main(app: AndroidApp) {
         .ok()
         .and_then(|t| toml::from_str(&t).ok())
         .unwrap_or_default();
+    // Before the first frame, so no screenshot sees one the user wanted hidden.
+    set_screen_security(settings.screen_security);
     let source = if settings.transport == "reticulum" {
         Source::Mesh(settings.replica().to_string(), crate::mesh::BOX_SIZE)
     } else {
@@ -250,7 +261,7 @@ const FILE_PICKER: &str = "network.katzenpost.hushphone.FilePicker";
 /// The text of a QR code the camera sees, or none if the user went back. Only ever called for
 /// the user pressing Scan; the camera permission is asked for then.
 pub fn scan_code(_: &UserIntent) -> Result<Option<String>, String> {
-    let secure = if cfg!(feature = "test-screenshots") { "0" } else { "1" };
+    let secure = if SECURE.load(Ordering::Relaxed) { "1" } else { "0" };
     pick("network.katzenpost.hushphone.QrScanner", &[("secure", secure)])
 }
 
