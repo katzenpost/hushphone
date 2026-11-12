@@ -43,7 +43,7 @@ sound), the window in `ui/` (Slint), and the Android glue in `android/` and `pac
 
 ## Status and compatibility
 
-This tree is version 0.2.1. hushphone writes katzenqt1 wire version 4 by default, or 3 with
+This tree is version 0.3.0. hushphone writes katzenqt1 wire version 4 by default, or 3 with
 `--wire-version 3`, and reads both. Voice clips are Ogg Opus, sent as files as frank_chat and
 katzenqt send them. Vouchers by sound are checked against ggwave vectors in `tests/data/ggwave`,
 taken from ggwave-rs and pigeonhole_reticulous.

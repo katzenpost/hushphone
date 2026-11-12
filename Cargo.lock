@@ -2725,7 +2725,7 @@ checksum = "48ce8546b993eaf241d69ded33b1be6d205dd9857ec879d9d18bd05d3676e144"
 
 [[package]]
 name = "hushphone"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "arboard",
  "chrono",
@@ -4904,7 +4904,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=78ff7eead383f1b92e20c444e64a2add194cdccc#78ff7eead383f1b92e20c444e64a2add194cdccc"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=5aeafcadcf1d43ef52925e648e0ec1bce69f397d#5aeafcadcf1d43ef52925e648e0ec1bce69f397d"
 dependencies = [
  "base64 0.22.1",
  "blake2",

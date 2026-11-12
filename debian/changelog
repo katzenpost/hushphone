@@ -1,11 +1,17 @@
-hushphone (0.2.1) unstable; urgency=medium
+hushphone (0.3.0) unstable; urgency=medium
 
   * Drop the SQLite dependency that came with the thin client's persistent API
     (RUSTSEC-2026-0459).
-  * Android: Screen security, an opt-in setting that keeps screens out of screenshots;
-    off by default, where 0.2.0 always kept them out.
+  * Android: Screen security, an opt-in setting that keeps screens out of screenshots,
+    the QR scanner's included; off by default, where 0.2.0 always kept them out.
+  * Pictures are sent smaller, as JPEG without metadata; Send original sends the file
+    untouched.
+  * Joining a group: a failed wait for the voucher's reply is retried with backoff instead
+    of ending the join, a second voucher no longer drops the first, a joining group shows
+    its latest failure, and joins are logged under hushphone-join without codes or names.
+    Thanks to @gabrix73 for finding and reporting these bugs.
 
- -- Katzenpost <packages@katzenpost.network>  Thu, 12 Nov 2026 11:47:01 +0000
+ -- Katzenpost <packages@katzenpost.network>  Thu, 12 Nov 2026 17:45:00 +0000
 
 hushphone (0.2.0) unstable; urgency=medium
 
