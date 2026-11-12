@@ -2660,7 +2660,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "highctidh"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/highctidh-rs?rev=45d0ac2a5c7271626e762e2c9fe1d0e442a3fbb8#45d0ac2a5c7271626e762e2c9fe1d0e442a3fbb8"
+source = "git+https://github.com/katzenpost/highctidh-rs?rev=feae6de91536f345f55afbf33122b6f43b060378#feae6de91536f345f55afbf33122b6f43b060378"
 dependencies = [
  "cc",
  "rand_core 0.10.1",
@@ -2695,7 +2695,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "hpqc"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/hpqc?rev=0593c80f32f09eb17fbeb02bf0b84b3286524663#0593c80f32f09eb17fbeb02bf0b84b3286524663"
+source = "git+https://github.com/katzenpost/hpqc?rev=78696ceb9c7ebdb2b431b9c9a282c0db312518f2#78696ceb9c7ebdb2b431b9c9a282c0db312518f2"
 dependencies = [
  "aes-gcm-siv",
  "blake2b_simd",
@@ -4904,7 +4904,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=5aeafcadcf1d43ef52925e648e0ec1bce69f397d#5aeafcadcf1d43ef52925e648e0ec1bce69f397d"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=75befb2051f2727bca8d0dcfd47d246173bb4d52#75befb2051f2727bca8d0dcfd47d246173bb4d52"
 dependencies = [
  "base64 0.22.1",
  "blake2",
