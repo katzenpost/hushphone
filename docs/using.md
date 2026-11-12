@@ -22,6 +22,7 @@
   on the longest side, as a JPEG, turned upright, with transparency shown white and without their
   metadata (location, camera, time). hushphone shows both sizes, such as 286 KB → 54 KB, and
   Send original sends the file untouched. Animations are always sent as they are.
+  ![Send a picture: 519 KB → 73 KB, with Send and Send original](send-picture.png)
 - **Marks** on your messages: a clock while queued, ✓ once written to the replicas, ✓✓ once a
   member has acknowledged reading them.
 - **F10** hides the window's contents at once.
