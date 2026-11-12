@@ -46,7 +46,7 @@ the same on all three.
 | Through | kpclientd, over its thin client socket | [berlinmesh/reticulum](https://git.emcomm.cc/berlinmesh/reticulum), in hushphone's own process | the official Python [RNS](https://github.com/markqvist/Reticulum), in hushphone's own process |
 | Build | default | default | `--features reticulum-py`, and `python3-dev` |
 | Needs at run time | a running kpclientd | a replica's address | a replica's address or a Reticulum config, and the Python packages below |
-| Platforms | Linux, Android | Linux | Linux |
+| Platforms | Linux, Android | Linux, Android | Linux |
 
 **mixnet** hides who talks to whom from the network: kpclientd sends hushphone's messages
 through the Katzenpost mix nodes to the replicas.
