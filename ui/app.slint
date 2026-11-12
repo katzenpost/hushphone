@@ -70,7 +70,7 @@ component ChatRow {
             HorizontalLayout {
                 spacing: Theme.s2;
                 Text {
-                    text: root.chat.joining ? "Joining…" : root.chat.preview;
+                    text: !root.chat.joining ? root.chat.preview : root.chat.preview == "" ? "Joining…" : "Joining… " + root.chat.preview;
                     color: root.chat.joining ? Theme.warn : Theme.text-muted;
                     font-size: Theme.fs-small;
                     font-italic: root.chat.joining;
@@ -1085,7 +1085,7 @@ component PendingDialog inherits Dialog {
     ListView {
         min-height: min(360px, AppState.pending.length * 56px + 8px);
         for chat in AppState.pending: HorizontalLayout {
-            height: 56px;
+            height: chat.preview != "" ? 72px : 56px;
             spacing: Theme.s3;
             Avatar { y: (parent.height - self.height) / 2; initial: chat.initial; tint: chat.tint; }
             VerticalLayout {
@@ -1101,6 +1101,13 @@ component PendingDialog inherits Dialog {
                 Text {
                     text: chat.minting ? "minting the voucher over \{AppState.network}…" : "voucher code ready · waiting to be added";
                     color: Theme.text-faint;
+                    font-size: Theme.fs-small;
+                    overflow: elide;
+                    wrap: no-wrap;
+                }
+                if chat.preview != "": Text {
+                    text: chat.preview;
+                    color: Theme.warn;
                     font-size: Theme.fs-small;
                     overflow: elide;
                     wrap: no-wrap;
@@ -1251,7 +1258,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, confirm-leave, confirm-clear, confirm-remove }
+export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, confirm-leave, confirm-clear, confirm-remove, confirm-join }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1308,7 +1315,7 @@ export component AppWindow inherits Window {
                     root.show-conversation = true;
                 }
                 new-group => { root.overlay = Overlay.new-group; }
-                join-group => { root.overlay = Overlay.join; }
+                join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
                 pending => { root.overlay = Overlay.pending; }
                 settings => { root.overlay = Overlay.settings; }
             }
@@ -1341,7 +1348,7 @@ export component AppWindow inherits Window {
                 height: area.height;
                 visible: !root.narrow;
                 new-group => { root.overlay = Overlay.new-group; }
-                join-group => { root.overlay = Overlay.join; }
+                join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
             }
 
             // Notices from the host never take focus or open a dialog: a strip under the header.
@@ -1514,6 +1521,14 @@ export component AppWindow inherits Window {
                     root.overlay = Overlay.none;
                     root.show-conversation = false;
                 }
+            }
+            // A reply to an earlier voucher can take minutes over the mixnet; a new one is a choice.
+            if root.overlay == Overlay.confirm-join: ConfirmDialog {
+                title: "Make another voucher?";
+                body: "A voucher you made earlier is still pending. A member may already have added you with it, and over the mixnet their reply can take a few minutes to arrive. You can wait for it, or make a new voucher anyway; give a member only one of your codes.";
+                action: "Make another";
+                dismissed => { root.overlay = Overlay.none; }
+                confirmed => { root.overlay = Overlay.join; }
             }
             if root.overlay == Overlay.confirm-clear: ConfirmDialog {
                 title: "Clear the history of " + AppState.current-name + "?";

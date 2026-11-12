@@ -37,6 +37,18 @@ pub fn set_screen_security(on: bool) {
     }
 }
 
+#[link(name = "log")]
+unsafe extern "C" {
+    fn __android_log_write(prio: i32, tag: *const std::ffi::c_char, text: *const std::ffi::c_char) -> i32;
+}
+
+/// One line to logcat under `tag`, at INFO, which release builds show.
+pub fn log(tag: &str, text: &str) {
+    let (Ok(tag), Ok(text)) = (std::ffi::CString::new(tag), std::ffi::CString::new(text)) else { return };
+    // SAFETY: both are NUL-terminated strings that outlive the call.
+    unsafe { __android_log_write(4, tag.as_ptr(), text.as_ptr()) };
+}
+
 #[unsafe(no_mangle)]
 fn android_main(app: AndroidApp) {
     crate::harden::process();

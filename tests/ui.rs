@@ -331,3 +331,24 @@ fn radio_mode_trades_the_chat_for_a_radio_and_back() {
     st.set_current_radio(false);
     assert_eq!(composer(&ui), 1);
 }
+
+/// With a voucher still pending, another is made only once the user confirms: a reply to the
+/// first may still be on its way.
+#[test]
+fn a_second_voucher_is_confirmed_first() {
+    let ui = window();
+    let join = button(&ui, "Join a group");
+    mock_elapsed_time(Duration::from_millis(600));
+    join.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::Join, "no voucher pending: straight to the dialog");
+    ui.set_overlay(Overlay::None);
+    let pending = ChatItem { id: "g".into(), joining: true, ..Default::default() };
+    ui.global::<AppState>().set_pending(ModelRc::new(VecModel::from(vec![pending])));
+    mock_elapsed_time(Duration::from_millis(600));
+    join.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::ConfirmJoin);
+    let again = button(&ui, "Make another");
+    mock_elapsed_time(Duration::from_millis(800));
+    again.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::Join);
+}
