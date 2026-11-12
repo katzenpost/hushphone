@@ -239,6 +239,30 @@ fn attaching_picks_from_the_send_directory() {
     assert_eq!(ui.get_overlay(), Overlay::None);
 }
 
+/// A picture made smaller is shown with both sizes; Send sends it smaller, Send original sends the
+/// file untouched, and Cancel drops it.
+#[test]
+fn a_picture_is_sent_smaller_unless_the_original_is_asked_for() {
+    let ui = window();
+    let chosen = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let (c, d) = (chosen.clone(), chosen.clone());
+    ui.global::<Actions>().on_send_picture(move |original| c.borrow_mut().push(if original { "original" } else { "smaller" }));
+    ui.global::<Actions>().on_drop_picture(move || d.borrow_mut().push("dropped"));
+    let st = ui.global::<AppState>();
+    st.set_current_name("friends".into());
+    st.set_picture_name("Screenshot.png".into());
+    st.set_picture_sizes("286 KB → 54 KB".into());
+    for (label, what) in [("Send", "smaller"), ("Send original", "original"), ("Cancel", "dropped")] {
+        ui.set_overlay(Overlay::Picture);
+        assert_eq!(ElementHandle::find_by_accessible_label(&ui, "286 KB → 54 KB").count(), 1);
+        let b = button(&ui, label);
+        mock_elapsed_time(Duration::from_millis(600));
+        b.mock_single_click(PointerEventButton::Left);
+        assert_eq!(chosen.borrow().last(), Some(&what), "{label}");
+        assert_eq!(ui.get_overlay(), Overlay::None);
+    }
+}
+
 /// Every pending voucher is listed in one place, whatever group is open, and can be cancelled from
 /// there: the cancel selects that group and asks for confirmation; nothing goes before it is given.
 #[test]

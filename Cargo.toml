@@ -44,6 +44,8 @@ unicode-security = "0.1.2"
 unicode-segmentation = "1.13"
 unicode-normalization = "0.1"
 infer = "0.22"
+# Pictures sent are scaled down and made JPEG, without their metadata; pure Rust, the version slint has.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rand = "0.8"
 zeroize = "1"

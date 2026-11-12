@@ -18,6 +18,7 @@ pub mod radio;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub mod sandbox;
 pub mod settings;
+pub mod shrink;
 pub mod sound;
 pub mod text;
 pub mod voice;

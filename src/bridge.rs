@@ -17,6 +17,7 @@ use zeroize::Zeroizing;
 
 use crate::backend::{self, Attachments, Cmd, Keys, Link, Source, Update};
 use crate::contacts::Contacts;
+use crate::effects::Picked;
 use crate::model::{self, Files};
 use crate::ping::{self, Pings};
 use crate::radio::Radio;
@@ -98,6 +99,8 @@ struct App {
     /// Set to stop listening for a voucher by sound; and since when it listens.
     listening: Option<(Arc<AtomicBool>, Instant)>,
     sending_sound: bool,
+    /// A picture picked to send, waiting for the user's choice: its group, the original, and smaller.
+    picture: Option<(ChatId, Picked, Picked)>,
     chat_model: Rc<VecModel<ChatItem>>,
     pending_model: Rc<VecModel<ChatItem>>,
     line_model: Rc<VecModel<LineItem>>,
@@ -195,6 +198,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         scanning: None,
         listening: None,
         sending_sound: false,
+        picture: None,
         chat_model,
         pending_model,
         line_model,
@@ -393,6 +397,12 @@ fn wire(ui: &AppWindow) {
     });
     a.on_attach_file(|name| {
         with_app(|app| app.attach(UserIntent::new(), name.to_string()));
+    });
+    a.on_send_picture(|original| {
+        with_app(|app| app.send_picture(original));
+    });
+    a.on_drop_picture(|| {
+        with_app(|app| app.picture = None);
     });
     a.on_save_file(|line| {
         with_app(|app| app.save(UserIntent::new(), line as usize));
@@ -769,21 +779,47 @@ impl App {
         }
         let dir = self.setup.files_dir.clone();
         self.effects.spawn(async move {
-            #[cfg(not(target_os = "android"))]
-            let r = effects::pick_file(&intent, &dir, &name).map(Some);
-            #[cfg(target_os = "android")]
-            let r = {
-                let _ = (&dir, &name);
-                tokio::task::spawn_blocking(move || crate::android::pick_document(&intent)).await.unwrap_or_else(|e| Err(e.to_string()))
-            };
+            let r = tokio::task::spawn_blocking(move || {
+                #[cfg(not(target_os = "android"))]
+                let r = effects::pick_file(&intent, &dir, &name).map(Some);
+                #[cfg(target_os = "android")]
+                let r = {
+                    let _ = (&dir, &name);
+                    crate::android::pick_document(&intent)
+                };
+                r.map(|f| f.map(|f| (crate::shrink::shrink(&f), f)))
+            })
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()));
             later(move |app| match r {
                 // The group the file was picked for must still be there to send it.
-                Ok(Some(f)) if app.joined(&chat) => app.send(Cmd::SendFile(chat, f.name, f.bytes)),
-                Ok(Some(_)) => app.notice("The group is gone: the file was not sent.", true),
+                Ok(Some(_)) if !app.joined(&chat) => app.notice("The group is gone: the file was not sent.", true),
+                Ok(Some((Some(small), f))) => {
+                    let sizes = format!("{} → {}", text::file_size(f.bytes.len()), text::file_size(small.bytes.len()));
+                    app.state(|s| {
+                        s.set_picture_name(f.name.as_str().into());
+                        s.set_picture_sizes(sizes.into());
+                    });
+                    app.picture = Some((chat, f, small));
+                    if let Some(ui) = app.ui.upgrade() {
+                        ui.set_overlay(Overlay::Picture);
+                    }
+                }
+                Ok(Some((None, f))) => app.send(Cmd::SendFile(chat, f.name, f.bytes)),
                 Ok(None) => {}
                 Err(e) => app.notice(&e, true),
             });
         });
+    }
+
+    /// Send the picture picked, as the user chose: smaller, or the original untouched.
+    fn send_picture(&mut self, original: bool) {
+        let Some((chat, f, small)) = self.picture.take() else { return };
+        if !self.joined(&chat) {
+            return self.notice("The group is gone: the file was not sent.", true);
+        }
+        let f = if original { f } else { small };
+        self.send(Cmd::SendFile(chat, f.name, f.bytes));
     }
 
     /// Save a line's attachment, read and written off this thread.
