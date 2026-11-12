@@ -554,12 +554,20 @@ impl App {
                 }
                 let seen = self.contacts.seen.get(&id).copied().unwrap_or(0);
                 let c = self.chats.entry(id.clone()).or_insert_with(|| ChatState { seen, ..Default::default() });
+                let joining = c.view.as_ref().is_none_or(|v| !v.joined);
+                let before = c.lines.last().map(|l| l.line.id);
                 c.view = Some(view);
                 if from != usize::MAX {
                     c.lines.retain(|l| l.line.id < from && !dropped.contains(&l.line.id));
                     c.lines.extend(lines);
                 } else {
                     c.lines.retain(|l| !dropped.contains(&l.line.id));
+                }
+                if joining {
+                    let fresh = c.lines.iter().filter(|l| before.is_none_or(|b| l.line.id > b));
+                    for n in fresh.filter_map(|l| l.line.notice.as_ref()).filter_map(model::join_log) {
+                        log_join(&id, &n);
+                    }
                 }
                 let files = &self.files;
                 self.radio.arrived(&id, &c.lines, |a| files.types.contains_key(&a.file));
@@ -906,7 +914,12 @@ impl App {
                     c.lines.iter().filter(|l| l.line.id > c.seen && !l.mine && l.line.notice.is_none()).count()
                 };
                 let when = c.lines.last().map_or(i64::MAX, |l| l.line.time);
-                Some((when, model::chat_item(v, last, unread, &who, now)))
+                let mut item = model::chat_item(v, last, unread, &who, now);
+                if item.joining {
+                    // The latest failure stays on the row while joining, not only in a notice that goes.
+                    item.preview = model::joining_note(&c.lines).into();
+                }
+                Some((when, item))
             })
             .collect();
         items.sort_by_key(|i| std::cmp::Reverse(i.0));
@@ -1120,6 +1133,17 @@ impl App {
             });
         });
     }
+}
+
+/// A line about a join to logcat, or stderr off Android, under `hushphone-join`: the group by a
+/// short hash of its local id, so the log names no group.
+fn log_join(chat: &str, what: &str) {
+    use sha2::Digest;
+    let line = format!("group {} {what}", &hex::encode(sha2::Sha256::digest(chat))[..8]);
+    #[cfg(target_os = "android")]
+    crate::android::log("hushphone-join", &line);
+    #[cfg(not(target_os = "android"))]
+    eprintln!("hushphone-join: {line}");
 }
 
 /// A voucher code in groups of eight characters, for reading out.

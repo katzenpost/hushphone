@@ -97,6 +97,26 @@ pub fn joining_note(lines: &[LineView]) -> String {
         .unwrap_or_default()
 }
 
+/// A joining group's notice as one line for the `hushphone-join` log, or none if it says nothing
+/// about the join. Never a notice's arguments but a failure's words, and in those any long word
+/// with a digit or base64's +/= in it is cut out, so no voucher code or key is logged; error
+/// names, all letters, stay.
+pub fn join_log(n: &Notice) -> Option<String> {
+    use NoticeKind::*;
+    match n.kind {
+        ActionFailed | ReplyUnreadable => {
+            let what = n.args.first().map(|a| text::identifier(a, 200)).unwrap_or_default();
+            let what: Vec<&str> = what
+                .split(' ')
+                .map(|w| if w.chars().count() >= 20 && w.chars().any(|c| c.is_ascii_digit() || "+/=".contains(c)) { "…" } else { w })
+                .collect();
+            Some(format!("{:?}: {}", n.kind, what.join(" ")))
+        }
+        Minting | VoucherMinted | Joined | NotJoinedYet | NameTakenJoining => Some(format!("{:?}", n.kind)),
+        _ => None,
+    }
+}
+
 pub fn line_item(
     l: &LineView,
     prev: Option<&LineView>,
@@ -281,6 +301,21 @@ mod tests {
         l[1].line.notice = Some(Notice { kind: NoticeKind::VoucherMinted, args: vec![] });
         assert!(joining_note(&l).contains("read timed out"));
         assert_eq!(joining_note(&l[1..]), "");
+    }
+
+    #[test]
+    fn join_log_keeps_codes_out() {
+        let code = "8so/D+D9qkFMnlXrzZVJXeAXJx8cBqVsihu/hWyubW8=";
+        let minted = Notice { kind: NoticeKind::VoucherMinted, args: vec![code.into(), "friends".into()] };
+        assert_eq!(join_log(&minted).as_deref(), Some("VoucherMinted"));
+        let failed = Notice {
+            kind: NoticeKind::ActionFailed,
+            args: vec![format!("wait for the voucher's reply failed: transport: ThinClientErrorVoucherSealOpenFailed {code}")],
+        };
+        let l = join_log(&failed).unwrap();
+        assert!(l.starts_with("ActionFailed: wait for the voucher's reply failed"), "{l}");
+        assert!(l.contains("ThinClientErrorVoucherSealOpenFailed …") && !l.contains("8so/"), "{l}");
+        assert_eq!(join_log(&Notice { kind: NoticeKind::Pinged, args: vec!["~m".into()] }), None);
     }
 
     #[test]
