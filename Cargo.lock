@@ -1992,18 +1992,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fallible-iterator"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
-
-[[package]]
-name = "fallible-streaming-iterator"
-version = "0.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
-
-[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2646,15 +2634,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashlink"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824e001ac4f3012dd16a264bec811403a67ca9deb6c102fc5049b32c4574b35f"
-dependencies = [
- "hashbrown 0.16.1",
-]
-
-[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2681,7 +2660,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 [[package]]
 name = "highctidh"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/highctidh-rs?rev=4686e46273d959e59d33736206ed2dbce7f82e57#4686e46273d959e59d33736206ed2dbce7f82e57"
+source = "git+https://github.com/katzenpost/highctidh-rs?rev=45d0ac2a5c7271626e762e2c9fe1d0e442a3fbb8#45d0ac2a5c7271626e762e2c9fe1d0e442a3fbb8"
 dependencies = [
  "cc",
  "rand_core 0.10.1",
@@ -2716,7 +2695,7 @@ checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 [[package]]
 name = "hpqc"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/hpqc?rev=4732d7fb7e6328407f69a5cea0dfb5e9eca308f7#4732d7fb7e6328407f69a5cea0dfb5e9eca308f7"
+source = "git+https://github.com/katzenpost/hpqc?rev=0593c80f32f09eb17fbeb02bf0b84b3286524663#0593c80f32f09eb17fbeb02bf0b84b3286524663"
 dependencies = [
  "aes-gcm-siv",
  "blake2b_simd",
@@ -2727,6 +2706,7 @@ dependencies = [
  "highctidh",
  "ml-dsa",
  "ml-kem",
+ "once_cell",
  "pq-mceliece",
  "rand_core 0.10.1",
  "sha2 0.11.1",
@@ -2745,7 +2725,7 @@ checksum = "48ce8546b993eaf241d69ded33b1be6d205dd9857ec879d9d18bd05d3676e144"
 
 [[package]]
 name = "hushphone"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "arboard",
  "chrono",
@@ -3595,19 +3575,16 @@ dependencies = [
 
 [[package]]
 name = "katzenpost_thin_client"
-version = "0.0.25"
-source = "git+https://github.com/katzenpost/thin_client?rev=98ff985ad348156eccbe7d3f4c4849a47041f2d3#98ff985ad348156eccbe7d3f4c4849a47041f2d3"
+version = "0.0.26"
+source = "git+https://github.com/katzenpost/thin_client?rev=bf75ce90be11b4eff9b34970e2caec348310cd2c#bf75ce90be11b4eff9b34970e2caec348310cd2c"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
  "blake2",
- "env_logger",
  "generic-array",
  "hex",
  "libc",
  "log",
  "rand 0.8.8",
- "rusqlite",
  "serde",
  "serde_bytes",
  "serde_cbor",
@@ -3754,17 +3731,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8a484fa48be5f62a8d3ffed767779d0ab808cfead91de98ef4362d469097dfb"
 dependencies = [
  "pkg-config",
-]
-
-[[package]]
-name = "libsqlite3-sys"
-version = "0.36.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b4103cffefa72eb8428cb6b47d6627161e51c2739fc5e3b734584157bc642a"
-dependencies = [
- "cc",
- "pkg-config",
- "vcpkg",
 ]
 
 [[package]]
@@ -4938,7 +4904,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=3264448de0ec01ecd0adc70bf4a6150e8e58ed6e#3264448de0ec01ecd0adc70bf4a6150e8e58ed6e"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=3356f462fba873436a7126be9fabdb73eeb09997#3356f462fba873436a7126be9fabdb73eeb09997"
 dependencies = [
  "base64 0.22.1",
  "blake2",
@@ -4949,6 +4915,7 @@ dependencies = [
  "env_logger",
  "falcon-rs",
  "getrandom 0.4.3",
+ "hashbrown 0.16.1",
  "hex",
  "hkdf",
  "hpqc",
@@ -4970,11 +4937,13 @@ dependencies = [
  "reticulum-msgpack",
  "reticulum-packet",
  "reticulum-router",
+ "serde",
  "serde_cbor",
  "serde_json",
  "sha2 0.10.9",
  "sha3 0.10.9",
  "subtle",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tokio-util",
@@ -5855,31 +5824,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rsqlite-vfs"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
-dependencies = [
- "hashbrown 0.16.1",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "rusqlite"
-version = "0.38.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1c93dd1c9683b438c392c492109cb702b8090b2bfc8fed6f6e4eb4523f17af3"
-dependencies = [
- "bitflags 2.13.2",
- "fallible-iterator",
- "fallible-streaming-iterator",
- "hashlink",
- "libsqlite3-sys",
- "smallvec",
- "sqlite-wasm-rs",
-]
-
-[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6554,18 +6498,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a0219bd7d979d58245a4f41f695e1ac9f8befdffadd7f61f1bae9e39abc6620"
 dependencies = [
  "zeroize",
-]
-
-[[package]]
-name = "sqlite-wasm-rs"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
-dependencies = [
- "cc",
- "js-sys",
- "rsqlite-vfs",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -7287,12 +7219,6 @@ dependencies = [
  "serde_core",
  "wasm-bindgen",
 ]
-
-[[package]]
-name = "vcpkg"
-version = "0.2.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
