@@ -22,10 +22,4 @@ phone and lets in only the apps you allow.
 - **No network.** On the mixnet, hushphone opens no IP socket. It holds the internet permission
   for the mesh, where it opens one TCP connection, to the replica.
 
-To build the APK:
-
-```sh
-cargo install cargo-ndk --locked --version 4.1.2
-export ANDROID_HOME=~/Android/Sdk
-make apk ABI=arm64-v8a      # or ABI=x86_64 for an emulator; dist/hushphone-<abi>.apk, debug-signed
-```
+To build the APK, see [Android APK](building.md#android-apk) in building.md.

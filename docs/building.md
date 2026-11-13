@@ -92,6 +92,32 @@ member only from a long voucher, so a mesh user joining one starts hushphone wit
 (`reticulum/config`), on every start; the identity beside it stays. That instance is hushphone's
 own: it does not touch `~/.reticulum` and is not shared with other Reticulum programs.
 
+## Android APK
+
+You need the Android SDK command-line tools, Java 21 and Rust. Point `ANDROID_HOME` at the SDK
+and `JAVA_HOME` at the JDK, then install the pinned SDK platform 36, build-tools 36.0.0, NDK,
+Rust toolchain and cargo-ndk:
+
+```sh
+export ANDROID_HOME=~/Android/Sdk
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+make android-tools
+```
+
+`make apk` builds for one ABI, and the default is `x86_64`, for the emulator. A phone almost
+always needs `arm64-v8a`; `adb shell getprop ro.product.cpu.abi` prints the phone's. An APK for
+the wrong ABI fails to install with `INSTALL_FAILED_NO_MATCHING_ABIS`.
+
+```sh
+make apk ABI=arm64-v8a
+adb install -r dist/hushphone-arm64-v8a.apk
+```
+
+`make apk` signs with the debug key in `~/.android/debug.keystore`, so it does not install over
+a release APK from the releases page (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). Switching between
+the two means uninstalling first, and uninstalling deletes hushphone's data: its state is
+encrypted under a Keystore key that Android deletes with the app.
+
 ## Debian package
 
 `make deb` builds `dist/hushphone_<version>_amd64.deb` in a Debian 13 build container, with
