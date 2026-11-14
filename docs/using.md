@@ -7,7 +7,7 @@
   screenshots.
 - **Talk** by holding the microphone button, or Space while it has focus; let go to send. Escape,
   or dragging away, cancels.
-- **Audio only**, the speaker switch in a group's header, turns the group into a two-way radio:
+- **Audio only**, the microphone switch in a group's header, turns the group into a two-way radio:
   voice messages received from then on play by themselves, one at a time in the order they
   arrive, and you hold the big button to talk. A dot marks a voice message not yet played.
   Switching it off returns to the chat, text and audio.

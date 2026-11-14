@@ -812,7 +812,7 @@ component Conversation inherits Rectangle {
                 }
                 if AppState.current-joined: IconSwitch {
                     y: (parent.height - self.height) / 2;
-                    icon: @image-url("icons/volume.svg");
+                    icon: @image-url("icons/mic.svg");
                     label: AppState.current-radio ? "Audio only" : "Text and audio";
                     checked: AppState.current-radio;
                     activated => { Actions.toggle-radio(); }
