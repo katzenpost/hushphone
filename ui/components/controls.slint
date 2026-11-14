@@ -133,6 +133,94 @@ export component IconButton {
     }
 }
 
+// An icon beside an on/off switch, one touch target; `activated` asks the app to flip `checked`.
+export component IconSwitch {
+    in property <image> icon;
+    in property <string> label;
+    in property <bool> checked;
+    callback activated();
+    private property <bool> keyboard-focus;
+
+    height: Theme.control;
+    horizontal-stretch: 0;
+    accessible-role: switch;
+    accessible-label: label;
+    accessible-checkable: true;
+    accessible-checked: checked;
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
+    forward-focus: fs;
+
+    stable := Stable { at: root.absolute-position; }
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: touch.pressed ? Theme.hover.darker(0.08) : touch.has-hover ? Theme.hover : transparent;
+        animate background { duration: Theme.quick; }
+    }
+
+    FocusRing {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        shown: root.keyboard-focus;
+        r: root.height / 2;
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.s2;
+        padding-right: Theme.s2;
+        spacing: Theme.s1;
+        alignment: center;
+        Icon {
+            y: (parent.height - self.height) / 2;
+            icon: root.icon;
+            tint: root.checked ? Theme.accent : touch.has-hover ? Theme.text : Theme.text-muted;
+        }
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 36px;
+            height: 20px;
+            border-radius: self.height / 2;
+            border-width: root.checked ? 0 : 1.5px;
+            border-color: Theme.text-muted;
+            background: root.checked ? Theme.accent : transparent;
+            animate background { duration: Theme.quick; }
+            Rectangle {
+                x: root.checked ? parent.width - self.width - 4px : 4px;
+                y: (parent.height - self.height) / 2;
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                background: root.checked ? Theme.on-accent : Theme.text-muted;
+                animate x { duration: Theme.quick; }
+            }
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { if (stable.ready()) { root.activated(); } }
+    }
+
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        focus-gained(reason) => { root.keyboard-focus = reason == FocusReason.tab-navigation; }
+        focus-lost => { root.keyboard-focus = false; }
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (stable.ready()) { root.activated(); }
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
 export component Button {
     in property <string> text;
     in property <image> icon;

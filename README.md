@@ -35,7 +35,7 @@ On the mixnet instead, start `kpclientd` and run `cargo run --release`; see
 
 - [Building and running](docs/building.md): the three transports, the Android APK, the Debian package, releases
 - [Android](docs/android.md) and [flags](docs/flags.md)
-- [Using it](docs/using.md), with radio mode and ping, and [vouchers](docs/vouchers.md)
+- [Using it](docs/using.md), with audio-only mode and ping, and [vouchers](docs/vouchers.md)
 - [Security](docs/SECURITY.md): what protects the state, memory and process, and the known gaps
 
 The code is in `src/` (`backend.rs` the client, `bridge.rs` and `model.rs` between it and the
