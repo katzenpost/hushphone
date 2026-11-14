@@ -28,11 +28,12 @@ On the mixnet instead, start `kpclientd` and run `cargo run --release`; see
 [docs/building.md](docs/building.md). On Android, install the APK from the
 [releases](https://github.com/katzenpost/hushphone/releases), and for the mixnet
 [kpclientd-android](https://github.com/katzenpost/kpclientd-android) too; see
-[docs/android.md](docs/android.md).
+[docs/android.md](docs/android.md). To build the APK yourself, see
+[docs/building.md](docs/building.md#android-apk).
 
 ## Documentation
 
-- [Building and running](docs/building.md): the three transports, the Debian package, releases
+- [Building and running](docs/building.md): the three transports, the Android APK, the Debian package, releases
 - [Android](docs/android.md) and [flags](docs/flags.md)
 - [Using it](docs/using.md), with radio mode and ping, and [vouchers](docs/vouchers.md)
 - [Security](docs/SECURITY.md): what protects the state, memory and process, and the known gaps
