@@ -536,6 +536,64 @@ fn a_finger_drags_a_long_chat_up_from_the_bottom() {
     touch(y, Ended);
 }
 
+/// A pasted message taller than the composer gets a scrollbar on its right, and every line of it
+/// can be scrolled into view, by wheel or by finger; a send brings the box back to one line.
+#[test]
+fn a_pasted_message_taller_than_the_composer_scrolls() {
+    use slint::platform::WindowEvent;
+    let ui = window();
+    let sent = Rc::new(std::cell::RefCell::new(String::new()));
+    let s = sent.clone();
+    ui.global::<Actions>().on_send_text(move |t| *s.borrow_mut() = t.into());
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    let input = ElementHandle::find_by_accessible_label(&ui, "Message to friends").next().unwrap();
+    let field = || ElementHandle::find_by_element_id(&ui, "Composer::field").next().unwrap();
+    let thumbs = || ElementHandle::find_by_element_id(&ui, "Composer::thumb").collect::<Vec<_>>();
+    let bottom = |e: &ElementHandle| e.absolute_position().y + e.size().height;
+
+    input.set_accessible_value("one");
+    let one = field().size().height;
+    assert!(thumbs().is_empty(), "no scrollbar while it all fits");
+
+    let pasted = (1..=12).map(|n| format!("line {n}")).collect::<Vec<_>>().join("\n");
+    input.set_accessible_value(pasted.as_str());
+    let f = field();
+    assert!(f.size().height > one, "the box grows");
+    let thumb = thumbs();
+    assert_eq!(thumb.len(), 1, "a pasted message taller than the box has a scrollbar");
+    let thumb = &thumb[0];
+    assert!(thumb.size().height < f.size().height, "the bar shows only part is in view");
+    assert!(thumb.absolute_position().x > f.absolute_position().x + f.size().width / 2.0, "on the right");
+
+    // The wheel scrolls to the last line: the bar reaches the bottom of the box.
+    let p = f.absolute_position();
+    let mid = slint::LogicalPosition::new(p.x + f.size().width / 2.0, p.y + f.size().height / 2.0);
+    ui.window().dispatch_event(WindowEvent::PointerMoved { position: mid });
+    ui.window().dispatch_event(WindowEvent::PointerScrolled { position: mid, delta_x: 0.0, delta_y: -1000.0 });
+    assert!((bottom(thumb) - bottom(&f)).abs() < 1.0, "scrolled to the end");
+
+    // A finger dragging down brings the first line back.
+    let low = slint::LogicalPosition::new(mid.x, mid.y + 30.0);
+    ui.window().dispatch_event(WindowEvent::PointerPressed { position: mid, button: PointerEventButton::Left });
+    for step in 1..=10 {
+        let at = slint::LogicalPosition::new(mid.x, mid.y + 3.0 * step as f32);
+        ui.window().dispatch_event(WindowEvent::PointerMoved { position: at });
+    }
+    ui.window().dispatch_event(WindowEvent::PointerReleased { position: low, button: PointerEventButton::Left });
+    mock_elapsed_time(Duration::from_millis(1000));
+    assert!(bottom(thumb) < bottom(&f) - 1.0, "a finger drag scrolls back up");
+
+    mock_elapsed_time(Duration::from_millis(600));
+    button(&ui, "Send to friends").mock_single_click(PointerEventButton::Left);
+    assert_eq!(*sent.borrow(), pasted);
+    input.set_accessible_value("x");
+    assert_eq!(field().size().height, one, "a send brings it back to one line");
+    assert!(thumbs().is_empty());
+}
+
 /// Emergency wipe: holding the button 2 s wipes, letting go sooner does not, and it is in reach
 /// of a gloved thumb.
 #[test]
