@@ -443,3 +443,72 @@ fn a_finger_that_stops_a_fling_and_rests_can_still_drag_the_list() {
     touch(tap_at, Ended);
     assert!(ui.get_show_conversation(), "a tap opens the chat");
 }
+
+#[test]
+fn a_finger_drags_a_long_chat_up_from_the_bottom() {
+    use hushphone::{LineItem, LineKind};
+    use i_slint_core::input::TouchPhase::{self, Ended, Moved, Started};
+    use slint::platform::{InternalEvent, WindowEvent};
+    use slint::private_unstable_api::re_exports::LogicalPoint;
+    let ui = window();
+    ui.window().set_size(LogicalSize::new(400.0, 800.0));
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    ui.set_show_conversation(true);
+    // Short recent lines and long older ones, so the list's estimate of its height grows as older
+    // lines come into view.
+    let lines: Vec<LineItem> = (0..60)
+        .map(|i| LineItem {
+            id: i,
+            kind: LineKind::Text,
+            from: "~bob".into(),
+            first: true,
+            text: if i == 59 {
+                "the last one".into()
+            } else if i < 50 {
+                format!("{i} {}", "a long line that wraps over a few rows ".repeat(4)).into()
+            } else {
+                format!("{i}").into()
+            },
+            ..Default::default()
+        })
+        .collect();
+    st.set_lines(ModelRc::new(VecModel::from(lines)));
+    let frames = |n: u32| {
+        for _ in 0..n {
+            mock_elapsed_time(Duration::from_millis(16));
+            slint::platform::update_timers_and_animations();
+        }
+    };
+    let last_y = || {
+        ElementHandle::find_by_accessible_label(&ui, "~bob: the last one")
+            .next()
+            .map(|e| e.absolute_position().y)
+    };
+    let touch = |y: f32, phase: TouchPhase| {
+        ui.window()
+            .dispatch_event(WindowEvent::internal(InternalEvent::Touch {
+                id: 0,
+                position: LogicalPoint::new(200.0, y),
+                phase,
+            }));
+    };
+    let _ = last_y();
+    frames(40);
+    let start = last_y().expect("the chat opens at its last line");
+
+    // A slow drag down by 150px, to read older lines.
+    let mut y = 300.0;
+    touch(y, Started);
+    for _ in 0..50 {
+        frames(1);
+        y += 3.0;
+        touch(y, Moved);
+        let _ = last_y();
+    }
+    let moved = last_y().map_or(f32::INFINITY, |end| end - start);
+    assert!(moved > 140.0, "the list followed the finger, moved {moved}px");
+    touch(y, Ended);
+}
