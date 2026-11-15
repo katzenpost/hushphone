@@ -2,6 +2,7 @@
 //! in one group with another client scripted from outside through files in $HUSH_INTEROP.
 //! It does nothing unless HUSH_INTEROP is set. HUSH_ROLE is host (default) or guest, HUSH_GROUP
 //! the group's name, HUSH_DAEMON the daemon's address, HUSH_EXPECT the text the other side sends.
+//! With HUSH_REPLICA (host:port) it reaches Pigeonhole over the mesh through that replica instead.
 //!   host:  create the group; wait for $HUSH_INTEROP/voucher; add that member; send; wait.
 //!   guest: join; write the voucher to $HUSH_INTEROP/hush.voucher; wait to be added; send; wait.
 //! Every few seconds the group's lines and state go to $HUSH_INTEROP/hush.lines; status lines go
@@ -104,7 +105,10 @@ fn namenlos_interop() {
             cache_dir: data.join("cache"),
             files_dir: data.join("files"),
             data_dir: data.clone(),
-            source: Source::Daemon(daemon),
+            source: match std::env::var("HUSH_REPLICA") {
+                Ok(r) => Source::Mesh(r, hushphone::mesh::BOX_SIZE),
+                Err(_) => Source::Daemon(daemon),
+            },
             default_daemon: String::new(),
             name: Some("hush".into()),
             wire_version: None,

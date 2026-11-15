@@ -84,9 +84,10 @@ VIRTUAL_ENV=~/.venvs/hushphone cargo run --release --features reticulum-py -- \
 
 **Across the bridge.** Members on the mesh and on the mixnet share groups through a bridge
 replica, such as namenlos's at `162.220.11.225:4242`. Either side can found a group and add the
-other with a voucher, with one exception for now: a group founded on the mixnet can add a mesh
-member only from a long voucher, so a mesh user joining one starts hushphone with
-`--wire-version 3` until kpclientd reads the compact form.
+other with a voucher. A member on the mixnet needs kpclientd v0.0.111 or later to add a mesh
+member's compact voucher; an older kpclientd refuses it with "Invalid signature". For now,
+lines from the mesh do not reach the mixnet through namenlos: the mesh writes 256-byte boxes,
+and namenlos's replicas take only 1549-byte ones (they list no `BoxPayloadLengths`).
 
 `--replica` writes a Reticulum config for that one link under the data directory
 (`reticulum/config`), on every start; the identity beside it stays. That instance is hushphone's
