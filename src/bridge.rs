@@ -11,6 +11,8 @@ use std::time::{Duration, Instant};
 
 use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, LineView};
 use pigeonhole_protocols::protocols::katzenqt1::engine::{ChatId, NoticeKind, parse_voucher_code, voucher_code};
+use pigeonhole_protocols::protocols::katzenqt1::tally::{self, Polls};
+use pigeonhole_protocols::protocols::katzenqt1::wire::Tally;
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use tokio::sync::mpsc::UnboundedSender;
 use zeroize::Zeroizing;
@@ -90,6 +92,8 @@ struct App {
     voice: Voice,
     radio: Radio,
     pings: Pings,
+    /// Poll syncs sent whose lines are not back yet: group, message type, poll.
+    syncing: HashSet<(ChatId, u64, Vec<u8>)>,
     /// What the user picked last: a result for an older pick does not move the selection.
     ticket: u64,
     /// Which group a recording in progress is for.
@@ -193,6 +197,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         voice,
         radio: Radio::default(),
         pings: Pings::default(),
+        syncing: HashSet::new(),
         ticket: 0,
         recording_for: None,
         scanning: None,
@@ -236,6 +241,15 @@ fn wire(ui: &AppWindow) {
     });
     a.on_select_chat(|id| {
         with_app(|app| app.select(id.to_string()));
+    });
+    a.on_create_poll(|question, options, availability| {
+        with_app(|app| app.create_poll(&question, &options, availability));
+    });
+    a.on_close_poll(|line| {
+        with_app(|app| app.close_poll(line as usize));
+    });
+    a.on_vote(|line, index| {
+        with_app(|app| app.vote(line as usize, index as usize));
     });
     a.on_send_text(|t| {
         with_app(|app| {
@@ -578,6 +592,8 @@ impl App {
                 }
                 let files = &self.files;
                 self.radio.arrived(&id, &c.lines, |a| files.types.contains_key(&a.file));
+                self.sync_polls(&id);
+                let Some(c) = self.chats.get_mut(&id) else { return };
                 let arrived = self.pings.arrived(&id, &c.lines);
                 let pinged = arrived.iter().any(|n| n.kind == NoticeKind::Pinged);
                 let arrived = arrived.last().map(|n| {
@@ -978,6 +994,15 @@ impl App {
         }
         st.set_joining_note(note.into());
         st.set_adding(v.adding);
+        // A poll's options keep their model while unchanged, so its rows are not made anew, which
+        // would make a tap on them wait to settle again.
+        for (i, item) in items.iter_mut().enumerate().filter(|(_, i)| i.kind == crate::LineKind::Poll) {
+            if let Some(old) = self.line_model.row_data(i).filter(|o| o.id == item.id)
+                && old.poll_options.iter().eq(item.poll_options.iter())
+            {
+                item.poll_options = old.poll_options;
+            }
+        }
         sync(&self.line_model, items);
         sync(&self.member_model, model::member_items(v, &who));
     }
@@ -1031,6 +1056,63 @@ impl App {
             && let Some((chat, line)) = self.radio.pop()
         {
             self.play(&chat, line);
+        }
+    }
+
+    /// The current group, joined, with our key in it and its polls.
+    fn polls(&self) -> Option<(ChatId, Polls)> {
+        let chat = self.current.clone()?;
+        let c = self.chats.get(&chat)?;
+        let me = c.view.as_ref().filter(|v| v.joined)?.me.clone();
+        let polls = Polls::from_lines(&c.lines, &me);
+        Some((chat, polls))
+    }
+
+    /// Send a poll to the current group: `options` one to a line, blank lines left out.
+    fn create_poll(&mut self, question: &str, options: &str, availability: bool) {
+        let Some(chat) = self.current.clone() else { return };
+        let Some(me) = self.chats.get(&chat).and_then(|c| c.view.as_ref()).filter(|v| v.joined).map(|v| v.me.clone()) else { return };
+        let mode = if availability { tally::Mode::Availability } else { tally::Mode::Approval };
+        match model::poll_text(question, options) {
+            Ok((q, o)) => self.send(Cmd::Tally(chat, tally::create(&rand::random::<[u8; 16]>(), &q, mode, &o, &me))),
+            Err(why) => self.notice(why, true),
+        }
+    }
+
+    /// Move our mark on option `index` of the poll at `line` in the current group to the next.
+    fn vote(&mut self, line: usize, index: usize) {
+        if let Some((chat, polls)) = self.polls()
+            && let Some(t) = polls.cycle(line, index)
+        {
+            self.send(Cmd::Tally(chat, t));
+        }
+    }
+
+    /// Close the poll we made at `line` in the current group.
+    fn close_poll(&mut self, line: usize) {
+        if let Some((chat, polls)) = self.polls()
+            && let Some(t) = polls.close(line)
+        {
+            self.send(Cmd::Tally(chat, t));
+        }
+    }
+
+    /// Answer other members' requests for the polls we hold, and ask for those we see voted on
+    /// but lack, as katzenqt does; each once, which the lines then record.
+    fn sync_polls(&mut self, id: &str) {
+        let Some(c) = self.chats.get(id) else { return };
+        let Some(me) = c.view.as_ref().filter(|v| v.joined).map(|v| v.me.clone()) else { return };
+        let polls = Polls::from_lines(&c.lines, &me);
+        let mut owed = polls.answers(&c.lines);
+        owed.extend(polls.requests(&c.lines));
+        // Sent, but our own line for it not back yet, so the lines still show it owed.
+        let key = |t: &Tally| (id.to_string(), t.kind, t.survey_id.clone());
+        let keys: HashSet<_> = owed.iter().map(key).collect();
+        self.syncing.retain(|k| k.0 != id || keys.contains(k));
+        for t in owed {
+            if self.syncing.insert(key(&t)) {
+                self.send(Cmd::Tally(id.to_string(), t));
+            }
         }
     }
 

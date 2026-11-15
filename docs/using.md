@@ -23,6 +23,13 @@
   metadata (location, camera, time). hushphone shows both sizes, such as 286 KB → 54 KB, and
   Send original sends the file untouched. Animations are always sent as they are.
   ![Send a picture: 519 KB → 73 KB, with Send and Send original](send-picture.png)
+- **Polls.** New poll, in a group's ⋯ menu, sends a question and its options, one to a line;
+  with "Let members answer maybe", members answer yes, maybe or no to each option, otherwise yes
+  or no. Tap an option to change your answer: yes, (maybe,) no, then none again. Every member sees
+  the counts as they change, and Show who voted lists each member's answers. The member who made
+  a poll can close it, and it then says what was chosen. Polls are katzenqt's: its members see
+  and answer hushphone's polls, and hushphone shows theirs.
+  ![Two polls: one open with four voters, one closed that allowed maybe](poll.png)
 - **Marks** on your messages: a clock while queued, ✓ once written to the replicas, ✓✓ once a
   member has acknowledged reading them.
 - **F10** hides the window's contents at once.

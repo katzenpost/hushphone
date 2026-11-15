@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
-import { LineItem, LineKind, Delivery, Actions } from "../globals.slint";
-import { Icon, IconButton, Avatar, ListTouch } from "controls.slint";
+import { LineItem, LineKind, Delivery, Actions, PollOption } from "../globals.slint";
+import { Icon, IconButton, Avatar, ListTouch, Stable } from "controls.slint";
 
 export component DeliveryMark {
     in property <Delivery> delivery;
@@ -133,6 +133,196 @@ component FileCard {
     }
 }
 
+// One option of a poll: pressed, it moves the user's mark to the next, none, yes, (maybe,) no.
+component PollRow {
+    in property <PollOption> option;
+    in property <int> voters;
+    in property <bool> closed;
+    in property <bool> availability;
+    in property <string> key;
+    in property <color> ink;
+    in property <color> meta;
+    in property <color> well;
+    // The bubble's colour, for the mark drawn on the ink.
+    in property <color> bubble;
+    callback activated();
+    min-height: 40px;
+    accessible-role: button;
+    accessible-enabled: !closed;
+    accessible-label: option.text + ", " + option.yes + " yes"
+        + (availability ? ", " + option.maybe + " maybe" : "")
+        + (option.mark == "" ? ", not marked" : ", you said " + option.mark);
+    accessible-action-default => { if (stable.ready()) { root.activated(); } }
+
+    stable := Stable {
+        enabled: !root.closed;
+        at: root.absolute-position;
+        key: root.key;
+    }
+
+    Rectangle {
+        border-radius: Theme.radius-sm;
+        background: root.well;
+        // The share of voters who said yes.
+        Rectangle {
+            x: 0;
+            width: root.voters == 0 ? 0 : parent.width * root.option.yes / root.voters;
+            border-radius: Theme.radius-sm;
+            background: root.ink.with-alpha(0.18);
+            animate width { duration: Theme.settle; }
+        }
+    }
+    HorizontalLayout {
+        padding-left: Theme.s2;
+        padding-right: Theme.s3;
+        spacing: Theme.s2;
+        // The user's mark: a check for yes, ? for maybe, a cross for no, empty for none.
+        Rectangle {
+            y: (parent.height - self.height) / 2;
+            width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            border-width: root.option.mark == "" ? 2px : 0;
+            border-color: root.meta;
+            background: root.option.mark == "yes" ? root.ink : root.option.mark == "" ? transparent : root.ink.with-alpha(0.45);
+            if root.option.mark == "yes": Icon {
+                icon: @image-url("../icons/check.svg");
+                size: 14px;
+                tint: root.bubble;
+            }
+            if root.option.mark == "no": Icon {
+                icon: @image-url("../icons/close.svg");
+                size: 12px;
+                tint: root.bubble;
+            }
+            if root.option.mark == "maybe": Text {
+                text: "?";
+                color: root.bubble;
+                font-size: Theme.fs-small;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+        Text {
+            text: root.option.text;
+            color: root.ink;
+            font-size: Theme.fs-body;
+            vertical-alignment: center;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+        }
+        Text {
+            text: root.availability ? root.option.yes + " · " + root.option.maybe + "?" : root.option.yes;
+            color: root.ink;
+            font-size: Theme.fs-body;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+    ListTouch {
+        active: !root.closed;
+        mouse-cursor: root.closed ? default : pointer;
+        clicked => { if (stable.ready()) { root.activated(); } }
+    }
+}
+
+component PollCard {
+    in property <LineItem> line;
+    in property <color> ink;
+    in property <color> meta;
+    in property <color> well;
+    min-width: 240px;
+    preferred-width: 320px;
+
+    VerticalLayout {
+        spacing: Theme.s2;
+        Text {
+            text: root.line.poll-availability ? "POLL · YES, MAYBE OR NO" : "POLL";
+            color: root.meta;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            accessible-role: none;
+        }
+        Text {
+            text: root.line.text;
+            color: root.ink;
+            font-size: Theme.fs-body;
+            font-weight: 700;
+            wrap: word-wrap;
+        }
+        for o[i] in root.line.poll-options: PollRow {
+            option: o;
+            voters: root.line.poll-voters;
+            closed: root.line.poll-closed;
+            availability: root.line.poll-availability;
+            key: root.line.id + "/" + i;
+            ink: root.ink;
+            meta: root.meta;
+            well: root.well;
+            bubble: root.line.mine ? Theme.mine : Theme.theirs;
+            activated => { Actions.vote(root.line.id, i); }
+        }
+        if root.line.poll-closed: Text {
+            text: root.line.poll-outcome;
+            color: root.ink;
+            font-size: Theme.fs-body;
+            font-weight: 600;
+            wrap: word-wrap;
+        }
+        Text {
+            text: (root.line.poll-voters == 1 ? "1 voter" : root.line.poll-voters + " voters")
+                + (root.line.poll-closed ? " · closed"
+                    : root.line.poll-availability ? " · tap an option for yes, maybe, no" : " · tap an option for yes, no");
+            color: root.meta;
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+        }
+        if root.line.poll-ballots != "": Text {
+            text: root.line.poll-ballots;
+            color: root.ink;
+            font-size: Theme.fs-small;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: Theme.s3;
+            alignment: start;
+            if root.line.poll-ballots == "": Text {
+                text: "Show who voted";
+                color: root.line.mine ? Theme.mine-text : Theme.accent;
+                font-size: Theme.fs-small;
+                font-weight: 600;
+                accessible-role: button;
+                accessible-label: self.text;
+                accessible-action-default => { Actions.expand(root.line.id); }
+                ListTouch {
+                    mouse-cursor: pointer;
+                    clicked => { Actions.expand(root.line.id); }
+                }
+            }
+            if root.line.poll-can-close: Text {
+                text: "Close poll";
+                color: root.line.mine ? Theme.mine-text : Theme.accent;
+                font-size: Theme.fs-small;
+                font-weight: 600;
+                accessible-role: button;
+                accessible-label: self.text;
+                accessible-action-default => { if (close.ready()) { Actions.close-poll(root.line.id); } }
+                close := Stable {
+                    at: parent.absolute-position;
+                    key: root.line.id;
+                    settle: 700ms;
+                }
+                ListTouch {
+                    mouse-cursor: pointer;
+                    clicked => { if (close.ready()) { Actions.close-poll(root.line.id); } }
+                }
+            }
+        }
+    }
+}
+
 // A notice from the app itself, in a frame no message can draw.
 export component NoticeRow {
     in property <string> text;
@@ -178,7 +368,7 @@ export component MessageRow {
     private property <color> meta: line.mine ? Theme.mine-meta : Theme.text-faint;
 
     accessible-role: list-item;
-    accessible-label: (line.mine ? "you" : line.from) + ": " + (line.kind == LineKind.voice ? "voice message " + line.duration : line.kind == LineKind.file ? "file " + line.file-name : line.text);
+    accessible-label: (line.mine ? "you" : line.from) + ": " + (line.kind == LineKind.voice ? "voice message " + line.duration : line.kind == LineKind.file ? "file " + line.file-name : line.kind == LineKind.poll ? "poll " + line.text : line.text);
 
     HorizontalLayout {
         padding-left: Theme.s4;
@@ -262,6 +452,12 @@ export component MessageRow {
                         line: root.line;
                         ink: root.ink;
                         meta: root.meta;
+                    }
+                    if root.line.kind == LineKind.poll: PollCard {
+                        line: root.line;
+                        ink: root.ink;
+                        meta: root.meta;
+                        well: root.line.mine ? #ffffff26 : Theme.bg;
                     }
                     if root.line.kind == LineKind.file: FileCard {
                         line: root.line;

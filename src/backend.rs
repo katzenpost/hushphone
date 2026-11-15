@@ -149,6 +149,8 @@ pub enum Cmd {
     Send(ChatId, String),
     SendFile(ChatId, String, Zeroizing<Vec<u8>>),
     Ping(ChatId),
+    /// A poll, or a vote in one: see [`crate::tally`].
+    Tally(ChatId, pigeonhole_protocols::protocols::katzenqt1::wire::Tally),
     Scan(ChatId),
     Remove(ChatId, Vec<u8>),
     Leave(ChatId),
@@ -565,6 +567,7 @@ async fn carry_out(c: &Client, cmd: Cmd, s: &mut Serving<'_>, tell: &impl Fn(Upd
             c.send_file(&id, &name, std::mem::take(&mut *bytes)).await?
         }
         Cmd::Ping(id) => c.ping(&id).await?,
+        Cmd::Tally(id, t) => c.send_tally(&id, t).await?,
         Cmd::Scan(id) => c.scan(&id).await?,
         Cmd::Remove(id, key) => c.remove(&id, key).await?,
         Cmd::Leave(id) => c.leave(&id).await?,
