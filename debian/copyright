@@ -6,6 +6,12 @@ Files: *
 Copyright: The Katzenpost Authors
 License: AGPL-3.0-only
 
+Files: packaging/network.katzenpost.hushphone.svg packaging/android/res/mipmap-*/ic_launcher_*.png
+Copyright: Eva Infeld
+Comment: The EchoMix mark, echomix-design/echomix_icon.svg from
+ https://github.com/evainfeld/echomix-website
+License: GFDL-1.3
+
 License: AGPL-3.0-only
  This program is free software: you can redistribute it and/or modify it
  under the terms of the GNU Affero General Public License as published by
@@ -18,3 +24,7 @@ License: AGPL-3.0-only
  .
  On Debian systems the full text is at
  /usr/share/common-licenses/AGPL-3.
+
+License: GFDL-1.3
+ On Debian systems the full text is at
+ /usr/share/common-licenses/GFDL-1.3.
