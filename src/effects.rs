@@ -150,6 +150,10 @@ mod imp {
         c.set().exclude_from_history().text(text.to_string()).map_err(|e| e.to_string())
     }
 
+    pub fn clear_clipboard(_: &UserIntent) -> Result<(), String> {
+        arboard::Clipboard::new().and_then(|mut c| c.clear()).map_err(|e| e.to_string())
+    }
+
     pub fn paste_text(_: &UserIntent) -> Result<String, String> {
         let mut c = arboard::Clipboard::new().map_err(|e| e.to_string())?;
         c.get_text().map_err(|e| e.to_string())
@@ -218,6 +222,10 @@ mod imp {
 
     pub fn copy_text(_: &UserIntent, text: &str) -> Result<(), String> {
         crate::android::copy_text(text, true)
+    }
+
+    pub fn clear_clipboard(_: &UserIntent) -> Result<(), String> {
+        crate::android::clear_clipboard()
     }
 
     pub fn paste_text(_: &UserIntent) -> Result<String, String> {

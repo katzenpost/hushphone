@@ -154,6 +154,15 @@ pub fn copy_text(text: &str, sensitive: bool) -> Result<(), String> {
     })
 }
 
+/// Empty the clipboard, for the wipe.
+pub fn clear_clipboard() -> Result<(), String> {
+    with_activity(|env, activity| {
+        let cm = clipboard(env, activity)?;
+        env.call_method(&cm, "clearPrimaryClip", "()V", &[])?;
+        Ok(())
+    })
+}
+
 pub fn paste_text() -> Result<String, String> {
     with_activity(|env, activity| {
         let cm = clipboard(env, activity)?;
@@ -619,6 +628,23 @@ fn generate_key<'a>(env: &mut jni::JNIEnv<'a>, strongbox: bool, unlocked: bool) 
         .l()?;
     env.call_method(&kg, "init", "(Ljava/security/spec/AlgorithmParameterSpec;)V", &[JValue::Object(&spec)])?;
     env.call_method(&kg, "generateKey", "()Ljavax/crypto/SecretKey;", &[])?.l()
+}
+
+/// Delete the Keystore's key that wraps the state's key, and the probe key if one was left; an
+/// error unless the Keystore then has neither.
+pub fn delete_state_key() -> Result<(), String> {
+    with_activity(|env, _| {
+        let ks = keystore(env)?;
+        let mut left = false;
+        for name in [STATE_KEY, PROBE] {
+            let alias = env.new_string(name)?;
+            env.call_method(&ks, "deleteEntry", "(Ljava/lang/String;)V", &[JValue::Object(&alias)])?;
+            left |= env.call_method(&ks, "containsAlias", "(Ljava/lang/String;)Z", &[JValue::Object(&alias)])?.z()?;
+        }
+        Ok(left)
+    })
+    .map_err(|e| format!("the Android Keystore would not delete the key: {e}"))
+    .and_then(|left| if left { Err("the Android Keystore still has the key".into()) } else { Ok(()) })
 }
 
 /// AES-GCM through the Keystore's key: `iv` given to decrypt, made by the Keystore to encrypt;

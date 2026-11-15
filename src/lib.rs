@@ -22,6 +22,7 @@ pub mod shrink;
 pub mod sound;
 pub mod text;
 pub mod voice;
+pub mod wipe;
 // The kernel structures it uses are laid out for 64-bit targets.
 #[cfg(all(target_os = "linux", target_pointer_width = "64"))]
 pub mod webcam;

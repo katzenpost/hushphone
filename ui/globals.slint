@@ -137,6 +137,8 @@ export global AppState {
     // Whether the key that seals the state is attested to stay deleted once deleted (rollback
     // resistance): "yes", "no", or "checking…".
     in property <string> key-deletion;
+    // After a wipe: what was destroyed and how.
+    in property <string> wipe-report;
     in property <string> notice;
     in property <bool> notice-error;
     // The files directory, for the hints; empty where the system picks files instead.
@@ -200,6 +202,10 @@ export global Actions {
     callback save-settings(string, bool, string, bool);
     callback choose-name(string);
     callback dismiss-notice();
+    // Destroy the key and the state and close the app: the emergency wipe, after a 2 s hold.
+    callback wipe();
+    // The report after a wipe was read: on to the first start.
+    callback wipe-seen();
 }
 
 // The time the app has been running, from the host. Controls compare it when they are used, so a

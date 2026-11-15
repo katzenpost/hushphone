@@ -243,7 +243,12 @@ pub fn start(ui: &AppWindow, mut setup: Setup) {
         }
         #[cfg(target_os = "android")]
         app.check_key_deletion();
-        if app.settings.name.is_empty() && app.locked.is_none() {
+        if let Some(w) = crate::wipe::marker(&app.setup.data_dir) {
+            app.state(|s| s.set_wipe_report(crate::wipe::report(&w).into()));
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(Overlay::Wiped);
+            }
+        } else if app.settings.name.is_empty() && app.locked.is_none() {
             if let Some(ui) = app.ui.upgrade() {
                 ui.set_overlay(Overlay::FirstRun);
             }
@@ -400,6 +405,42 @@ fn wire(ui: &AppWindow) {
     });
     a.on_dismiss_notice(|| {
         with_app(|app| app.notice("", false));
+    });
+    a.on_wipe(|| {
+        with_app(|app| {
+            // Nothing shows, nothing can be screenshotted, and the clipboard is empty.
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(Overlay::Wiping);
+            }
+            #[cfg(target_os = "android")]
+            crate::android::set_screen_security(true);
+            let _ = effects::clear_clipboard(&UserIntent::new());
+        });
+        // Once the blank screen is drawn: the key, its wrapped copy and the state go, then the
+        // process. See crate::wipe.
+        slint::Timer::single_shot(Duration::from_millis(100), || {
+            with_app(|app| {
+                app.cmd = None;
+                let hardware = app.settings.hardware_key_deletion == Some(true);
+                app.effects.block_on(crate::wipe::wipe(&crate::keys::System, &app.setup.data_dir, &app.setup.cache_dir, hardware))
+            });
+            // What this thread holds goes, the state's key with it: Secrets wipe their memory as
+            // they are freed. The rest goes with the process.
+            drop(APP.with(|a| a.borrow_mut().take()));
+            std::process::exit(0);
+        });
+    });
+    a.on_wipe_seen(|| {
+        with_app(|app| {
+            crate::wipe::forget_marker(&app.setup.data_dir);
+            app.state(|s| s.set_wipe_report("".into()));
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(if app.settings.name.is_empty() && app.locked.is_none() { Overlay::FirstRun } else { Overlay::None });
+            }
+            if !app.settings.name.is_empty() {
+                app.connect();
+            }
+        });
     });
     a.on_expand(|id| {
         with_app(|app| {
