@@ -168,7 +168,7 @@ pub fn start(ui: &AppWindow, mut setup: Setup) {
     #[cfg(target_os = "android")]
     {
         // Before the first frame, so no screenshot sees one the user wanted hidden.
-        crate::android::set_screen_security(settings.screen_security);
+        crate::android::init_screen_security(settings.screen_security);
         setup.source = crate::android::source(&settings, &setup.default_daemon);
     }
     if settings.daemon.is_empty() || setup.old_defaults.contains(&settings.daemon) {
