@@ -1,3 +1,15 @@
+hushphone (0.3.3) unstable; urgency=medium
+
+  * Switch a chat between text and audio-only with a toggle.
+  * Saved chats show at startup without waiting for kpclientd.
+  * Android: lists scroll by dragging with a finger, including a chat dragged up from
+    the bottom and a drag that moves onto another row.
+  * Polls in a group, as katzenqt makes them.
+  * Cancel a pending voucher, for joining a group or adding a member.
+  * Docs: building the Android APK.
+
+ -- Katzenpost <packages@katzenpost.network>  Sun, 15 Nov 2026 09:00:00 +0000
+
 hushphone (0.3.2) unstable; urgency=medium
 
   * Release builds are reproducible: the C sources of the CTIDH library are linked in
