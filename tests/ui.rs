@@ -362,3 +362,84 @@ fn a_second_voucher_is_confirmed_first() {
     again.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::Join);
 }
+
+#[test]
+fn a_finger_that_stops_a_fling_and_rests_can_still_drag_the_list() {
+    use i_slint_core::input::TouchPhase::{self, Ended, Moved, Started};
+    use slint::platform::{InternalEvent, WindowEvent};
+    use slint::private_unstable_api::re_exports::LogicalPoint;
+    let ui = window();
+    ui.window().set_size(LogicalSize::new(400.0, 800.0));
+    let chats: Vec<ChatItem> = (0..40)
+        .map(|i| ChatItem {
+            id: format!("c{i}").into(),
+            name: format!("Chat {i}").into(),
+            ..Default::default()
+        })
+        .collect();
+    ui.global::<AppState>()
+        .set_chats(ModelRc::new(VecModel::from(chats)));
+    let frames = |n: u32| {
+        for _ in 0..n {
+            mock_elapsed_time(Duration::from_millis(16));
+            slint::platform::update_timers_and_animations();
+        }
+    };
+    let row_y = |name: &str| {
+        let row = ElementHandle::find_by_accessible_label(&ui, name).next();
+        row.map(|e| e.absolute_position().y)
+    };
+    // Touch as the Android backend reports it.
+    let touch = |y: f32, phase: TouchPhase| {
+        let position = LogicalPoint::new(200.0, y);
+        ui.window()
+            .dispatch_event(WindowEvent::internal(InternalEvent::Touch {
+                id: 0,
+                position,
+                phase,
+            }));
+    };
+    let _ = row_y("Chat 0");
+    frames(40);
+
+    // A quick swipe up sets the list flinging.
+    let mut y = 700.0;
+    touch(y, Started);
+    for _ in 0..8 {
+        frames(1);
+        y -= 40.0;
+        touch(y, Moved);
+    }
+    touch(y, Ended);
+    frames(5);
+    // A finger stops it, rests a while, then drags it down: the list follows the finger.
+    touch(300.0, Started);
+    frames(1);
+    let caught = row_y("Chat 12").expect("the fling brought chat 12 into view");
+    frames(40);
+    assert_eq!(
+        row_y("Chat 12"),
+        Some(caught),
+        "the finger stopped the fling"
+    );
+    let mut y = 300.0;
+    for _ in 0..20 {
+        frames(1);
+        y += 10.0;
+        touch(y, Moved);
+    }
+    assert_eq!(
+        row_y("Chat 12"),
+        Some(caught + 200.0),
+        "the list followed the finger"
+    );
+    touch(y, Ended);
+    frames(60);
+    assert!(!ui.get_show_conversation(), "a drag opens no chat");
+
+    // A tap on a row that has come to rest still opens it.
+    let tap_at = row_y("Chat 12").unwrap() + 32.0;
+    touch(tap_at, Started);
+    touch(tap_at, Ended);
+    assert!(ui.get_show_conversation(), "a tap opens the chat");
+}

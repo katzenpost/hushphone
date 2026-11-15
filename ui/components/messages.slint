@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { LineItem, LineKind, Delivery, Actions } from "../globals.slint";
-import { Icon, IconButton, Avatar } from "controls.slint";
+import { Icon, IconButton, Avatar, ListTouch } from "controls.slint";
 
 export component DeliveryMark {
     in property <Delivery> delivery;
@@ -277,7 +277,7 @@ export component MessageRow {
                         accessible-role: button;
                         accessible-label: self.text;
                         accessible-action-default => { Actions.expand(root.line.id); }
-                        TouchArea {
+                        ListTouch {
                             mouse-cursor: pointer;
                             clicked => { Actions.expand(root.line.id); }
                         }

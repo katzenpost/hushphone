@@ -2735,6 +2735,7 @@ dependencies = [
  "ggwave",
  "hex",
  "i-slint-backend-testing",
+ "i-slint-core",
  "image",
  "infer",
  "jni 0.21.1",

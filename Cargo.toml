@@ -72,6 +72,8 @@ slint-build = "=1.18.1"
 
 [dev-dependencies]
 i-slint-backend-testing = "=1.18.1"
+# Only for TouchPhase, to touch the window as the Android backend does.
+i-slint-core = "=1.18.1"
 tempfile = "3"
 proptest = "1"
 

@@ -1,6 +1,14 @@
 import { Theme } from "../theme.slint";
 import { Clock } from "../globals.slint";
 
+// A touch area that can sit in a scrolling list: once the finger has moved 8px up or down it lets
+// go, and the list scrolls. Without this a finger that rested first, as when it stops a fling, keeps
+// the touch area, because the list only takes a drag that starts within 500ms of the press.
+export component ListTouch inherits TouchArea {
+    in property <bool> active: true;
+    enabled: root.active && !(root.pressed && abs(root.mouse-y - root.pressed-y) > 8px);
+}
+
 // Accepts activation only once its control has been visible, enabled, unmoved and about the
 // same thing for `settle`, so content arriving and shifting the layout, or a row that comes to
 // stand for another message, cannot steer a click onto it. It reads the host's clock when asked,
@@ -106,8 +114,8 @@ export component IconButton {
         tint: !root.enabled ? Theme.text-faint : touch.has-hover ? root.tint-active : root.tint;
     }
 
-    touch := TouchArea {
-        enabled: root.enabled;
+    touch := ListTouch {
+        active: root.enabled;
         mouse-cursor: root.enabled ? pointer : default;
         clicked => {
             if (stable.ready()) { root.activated(); }
@@ -290,8 +298,8 @@ export component Button {
         }
     }
 
-    touch := TouchArea {
-        enabled: root.enabled;
+    touch := ListTouch {
+        active: root.enabled;
         mouse-cursor: root.enabled ? pointer : default;
         clicked => {
             if (stable.ready()) { root.activated(); }
