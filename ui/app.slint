@@ -1,7 +1,7 @@
 import { ListView, LineEdit, ComboBox, Spinner, Palette, Switch } from "std-widgets.slint";
 import { Theme, ThemePreference } from "theme.slint";
 import { AppState, Actions, Clock, ChatItem, LineItem, MemberItem, Connection, LineKind, Delivery } from "globals.slint";
-import { Stable, Icon, IconButton, IconSwitch, Button, Avatar, Badge } from "components/controls.slint";
+import { Stable, ListTouch, Icon, IconButton, IconSwitch, Button, Avatar, Badge } from "components/controls.slint";
 import { MessageRow, NoticeRow } from "components/messages.slint";
 import { Dialog, Hint, FieldLabel } from "components/dialog.slint";
 
@@ -83,7 +83,7 @@ component ChatRow {
             }
         }
     }
-    touch := TouchArea {
+    touch := ListTouch {
         mouse-cursor: pointer;
         clicked => { if (stable.ready()) { root.activated(); } }
     }
@@ -853,8 +853,10 @@ component Conversation inherits Rectangle {
                 self.at-bottom = true;
                 self.content-y = self.bottom;
             }
-            // Only the reader's own scrolling decides whether to follow, never our own.
-            scrolled => { self.at-bottom = self.content-y <= self.bottom + 48px; }
+            // Only the reader's own scrolling decides whether to follow, never our own. Only the very
+            // bottom counts: older lines coming into view move `bottom`, so with any slack a finger
+            // dragging up from the bottom would be pulled back each time.
+            scrolled => { self.at-bottom = self.content-y <= self.bottom + 1px; }
             changed bottom => {
                 if (self.at-bottom) { self.content-y = self.bottom; }
             }
