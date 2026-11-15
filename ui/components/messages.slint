@@ -1,6 +1,6 @@
 import { Theme } from "../theme.slint";
 import { LineItem, LineKind, Delivery, Actions, PollOption } from "../globals.slint";
-import { Icon, IconButton, Avatar, Stable } from "controls.slint";
+import { Icon, IconButton, Avatar, ListTouch, Stable } from "controls.slint";
 
 export component DeliveryMark {
     in property <Delivery> delivery;
@@ -220,8 +220,8 @@ component PollRow {
             vertical-alignment: center;
         }
     }
-    TouchArea {
-        enabled: !root.closed;
+    ListTouch {
+        active: !root.closed;
         mouse-cursor: root.closed ? default : pointer;
         clicked => { if (stable.ready()) { root.activated(); } }
     }
@@ -296,7 +296,7 @@ component PollCard {
                 accessible-role: button;
                 accessible-label: self.text;
                 accessible-action-default => { Actions.expand(root.line.id); }
-                TouchArea {
+                ListTouch {
                     mouse-cursor: pointer;
                     clicked => { Actions.expand(root.line.id); }
                 }
@@ -314,7 +314,7 @@ component PollCard {
                     key: root.line.id;
                     settle: 700ms;
                 }
-                TouchArea {
+                ListTouch {
                     mouse-cursor: pointer;
                     clicked => { if (close.ready()) { Actions.close-poll(root.line.id); } }
                 }
@@ -473,7 +473,7 @@ export component MessageRow {
                         accessible-role: button;
                         accessible-label: self.text;
                         accessible-action-default => { Actions.expand(root.line.id); }
-                        TouchArea {
+                        ListTouch {
                             mouse-cursor: pointer;
                             clicked => { Actions.expand(root.line.id); }
                         }

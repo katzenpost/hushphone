@@ -362,3 +362,154 @@ fn a_second_voucher_is_confirmed_first() {
     again.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::Join);
 }
+
+#[test]
+fn a_finger_that_stops_a_fling_and_rests_can_still_drag_the_list() {
+    use i_slint_core::input::TouchPhase::{self, Ended, Moved, Started};
+    use slint::platform::{InternalEvent, WindowEvent};
+    use slint::private_unstable_api::re_exports::LogicalPoint;
+    let ui = window();
+    ui.window().set_size(LogicalSize::new(400.0, 800.0));
+    let chats: Vec<ChatItem> = (0..40)
+        .map(|i| ChatItem {
+            id: format!("c{i}").into(),
+            name: format!("Chat {i}").into(),
+            ..Default::default()
+        })
+        .collect();
+    ui.global::<AppState>()
+        .set_chats(ModelRc::new(VecModel::from(chats)));
+    let frames = |n: u32| {
+        for _ in 0..n {
+            mock_elapsed_time(Duration::from_millis(16));
+            slint::platform::update_timers_and_animations();
+        }
+    };
+    let row_y = |name: &str| {
+        let row = ElementHandle::find_by_accessible_label(&ui, name).next();
+        row.map(|e| e.absolute_position().y)
+    };
+    // Touch as the Android backend reports it.
+    let touch = |y: f32, phase: TouchPhase| {
+        let position = LogicalPoint::new(200.0, y);
+        ui.window()
+            .dispatch_event(WindowEvent::internal(InternalEvent::Touch {
+                id: 0,
+                position,
+                phase,
+            }));
+    };
+    let _ = row_y("Chat 0");
+    frames(40);
+
+    // A quick swipe up sets the list flinging.
+    let mut y = 700.0;
+    touch(y, Started);
+    for _ in 0..8 {
+        frames(1);
+        y -= 40.0;
+        touch(y, Moved);
+    }
+    touch(y, Ended);
+    frames(5);
+    // A finger stops it, rests a while, then drags it down: the list follows the finger.
+    touch(300.0, Started);
+    frames(1);
+    let caught = row_y("Chat 12").expect("the fling brought chat 12 into view");
+    frames(40);
+    assert_eq!(
+        row_y("Chat 12"),
+        Some(caught),
+        "the finger stopped the fling"
+    );
+    // Its first move past the slop lands on another row, as a quick finger's can.
+    let mut y = 300.0;
+    for step in [80.0].into_iter().chain([10.0; 12]) {
+        frames(1);
+        y += step;
+        touch(y, Moved);
+    }
+    assert_eq!(
+        row_y("Chat 12"),
+        Some(caught + 200.0),
+        "the list followed the finger"
+    );
+    touch(y, Ended);
+    frames(60);
+    assert!(!ui.get_show_conversation(), "a drag opens no chat");
+
+    // A tap on a row that has come to rest still opens it.
+    let tap_at = row_y("Chat 12").unwrap() + 32.0;
+    touch(tap_at, Started);
+    touch(tap_at, Ended);
+    assert!(ui.get_show_conversation(), "a tap opens the chat");
+}
+
+#[test]
+fn a_finger_drags_a_long_chat_up_from_the_bottom() {
+    use hushphone::{LineItem, LineKind};
+    use i_slint_core::input::TouchPhase::{self, Ended, Moved, Started};
+    use slint::platform::{InternalEvent, WindowEvent};
+    use slint::private_unstable_api::re_exports::LogicalPoint;
+    let ui = window();
+    ui.window().set_size(LogicalSize::new(400.0, 800.0));
+    let st = ui.global::<AppState>();
+    st.set_current("c".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    ui.set_show_conversation(true);
+    // Short recent lines and long older ones, so the list's estimate of its height grows as older
+    // lines come into view.
+    let lines: Vec<LineItem> = (0..60)
+        .map(|i| LineItem {
+            id: i,
+            kind: LineKind::Text,
+            from: "~bob".into(),
+            first: true,
+            text: if i == 59 {
+                "the last one".into()
+            } else if i < 50 {
+                format!("{i} {}", "a long line that wraps over a few rows ".repeat(4)).into()
+            } else {
+                format!("{i}").into()
+            },
+            ..Default::default()
+        })
+        .collect();
+    st.set_lines(ModelRc::new(VecModel::from(lines)));
+    let frames = |n: u32| {
+        for _ in 0..n {
+            mock_elapsed_time(Duration::from_millis(16));
+            slint::platform::update_timers_and_animations();
+        }
+    };
+    let last_y = || {
+        ElementHandle::find_by_accessible_label(&ui, "~bob: the last one")
+            .next()
+            .map(|e| e.absolute_position().y)
+    };
+    let touch = |y: f32, phase: TouchPhase| {
+        ui.window()
+            .dispatch_event(WindowEvent::internal(InternalEvent::Touch {
+                id: 0,
+                position: LogicalPoint::new(200.0, y),
+                phase,
+            }));
+    };
+    let _ = last_y();
+    frames(40);
+    let start = last_y().expect("the chat opens at its last line");
+
+    // A slow drag down by 150px, to read older lines.
+    let mut y = 300.0;
+    touch(y, Started);
+    for _ in 0..50 {
+        frames(1);
+        y += 3.0;
+        touch(y, Moved);
+        let _ = last_y();
+    }
+    let moved = last_y().map_or(f32::INFINITY, |end| end - start);
+    assert!(moved > 140.0, "the list followed the finger, moved {moved}px");
+    touch(y, Ended);
+}
