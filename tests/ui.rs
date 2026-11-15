@@ -78,7 +78,8 @@ fn cancel_joining_from_the_voucher_card() {
     let ui = window();
     let cancelled = Rc::new(Cell::new(0));
     let c = cancelled.clone();
-    ui.global::<Actions>().on_leave(move || c.set(c.get() + 1));
+    ui.global::<Actions>().on_cancel_voucher(move || c.set(c.get() + 1));
+    ui.global::<Actions>().on_leave(|| panic!("a join is cancelled, not left"));
     let st = ui.global::<AppState>();
     st.set_current("g".into());
     st.set_current_name("friends".into());
@@ -96,6 +97,27 @@ fn cancel_joining_from_the_voucher_card() {
     let _ = confirm.absolute_position();
     mock_elapsed_time(Duration::from_millis(800));
     confirm.mock_single_click(PointerEventButton::Left);
+    assert_eq!(cancelled.get(), 1);
+}
+
+/// A member being added can be cancelled from the group's header, which shows only while adding.
+#[test]
+fn cancel_adding_from_the_header() {
+    let ui = window();
+    let cancelled = Rc::new(Cell::new(0));
+    let c = cancelled.clone();
+    ui.global::<Actions>().on_cancel_voucher(move || c.set(c.get() + 1));
+    let st = ui.global::<AppState>();
+    st.set_current("g".into());
+    st.set_current_name("friends".into());
+    st.set_current_joined(true);
+    ui.set_show_conversation(true);
+    mock_elapsed_time(Duration::from_millis(100));
+    assert_eq!(ElementHandle::find_by_accessible_label(&ui, "Cancel adding a member").count(), 0);
+    st.set_adding(true);
+    let cancel = button(&ui, "Cancel adding a member");
+    mock_elapsed_time(Duration::from_millis(600));
+    cancel.mock_single_click(PointerEventButton::Left);
     assert_eq!(cancelled.get(), 1);
 }
 
@@ -273,7 +295,7 @@ fn pending_vouchers_are_listed_and_cancelled_from_the_menu() {
     ui.global::<Actions>().on_select_chat(move |id| *s.borrow_mut() = id.to_string());
     let cancelled = Rc::new(Cell::new(0));
     let c = cancelled.clone();
-    ui.global::<Actions>().on_leave(move || c.set(c.get() + 1));
+    ui.global::<Actions>().on_cancel_voucher(move || c.set(c.get() + 1));
     let pending = |id: &str, name: &str, minting: bool| ChatItem {
         id: id.into(),
         name: name.into(),

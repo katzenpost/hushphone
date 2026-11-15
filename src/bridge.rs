@@ -292,6 +292,13 @@ fn wire(ui: &AppWindow) {
             }
         });
     });
+    a.on_cancel_voucher(|| {
+        with_app(|app| {
+            if let Some(id) = app.current.clone() {
+                app.send(Cmd::Cancel(id));
+            }
+        });
+    });
     a.on_clear(|| {
         with_app(|app| {
             if let Some(id) = app.current.clone() {

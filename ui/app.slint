@@ -805,6 +805,12 @@ component Conversation inherits Rectangle {
                     enabled: !AppState.adding;
                     activated => { root.invite(); }
                 }
+                if AppState.current-joined && AppState.adding: IconButton {
+                    y: (parent.height - self.height) / 2;
+                    icon: @image-url("icons/close.svg");
+                    label: "Cancel adding a member";
+                    activated => { Actions.cancel-voucher(); }
+                }
                 if AppState.current-joined: IconButton {
                     y: (parent.height - self.height) / 2;
                     icon: @image-url("icons/bell.svg");
@@ -1579,8 +1585,9 @@ export component AppWindow inherits Window {
                     : "The voucher is deleted from this device. If someone adds its code later, you will not join; to join, make a new voucher.";
                 action: AppState.current-joined ? "Leave group" : "Cancel joining";
                 dismissed => { root.overlay = Overlay.none; }
+                // A join that completes meanwhile is kept: the cancel then only says so.
                 confirmed => {
-                    Actions.leave();
+                    if AppState.current-joined { Actions.leave(); } else { Actions.cancel-voucher(); }
                     root.overlay = Overlay.none;
                     root.show-conversation = false;
                 }
