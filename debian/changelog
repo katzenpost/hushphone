@@ -1,3 +1,9 @@
+hushphone (0.3.4) unstable; urgency=medium
+
+  * The New poll entry in the group menu opens the poll dialog again.
+
+ -- Katzenpost <packages@katzenpost.network>  Sun, 15 Nov 2026 16:34:55 +0000
+
 hushphone (0.3.3) unstable; urgency=medium
 
   * Switch a chat between text and audio-only with a toggle.
