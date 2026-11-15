@@ -9,9 +9,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use pigeonhole_protocols::protocols::katzenqt1::client::sealed_file::{seal_file, write_in_place};
-use pigeonhole_protocols::protocols::katzenqt1::client::store::StoreFiles;
-use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, Files, LineView};
-use pigeonhole_protocols::protocols::katzenqt1::engine::ChatId;
+use pigeonhole_protocols::protocols::katzenqt1::client::store::{Options, Store, StoreFiles};
+use pigeonhole_protocols::protocols::katzenqt1::client::{ChatView, Client, ClientError, Config, Files, LineView, MemberView};
+use pigeonhole_protocols::protocols::katzenqt1::engine::{Chat, ChatId, Line};
 use pigeonhole_protocols::secret::Secret;
 use pigeonhole_protocols::transport::Backend;
 use pigeonhole_protocols::transport::remote::Remote;
@@ -257,6 +257,11 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
         key: key.clone(),
         wire_version: p.wire_version,
     };
+    // The saved groups show at once; reaching the daemon or a replica can take long.
+    for (view, lines) in saved(&cfg()) {
+        let Lines { lines, paths, files } = with_files(lines, &p.state_dir, &att, &mut Known::new());
+        tell(Update::Chat { view, from: 0, lines, dropped: Vec::new(), paths, files });
+    }
     match &p.source {
         Source::Memory(w) => {
             tell(Update::Link(Link::Online));
@@ -331,10 +336,16 @@ type Known = std::collections::HashSet<String>;
 /// files that have arrived hold, read here rather than on the UI's thread.
 async fn lines_from(c: &Client, id: &str, first: usize, att: &Attachments, known: &mut Known) -> Lines {
     let lines = c.lines(id, first.checked_sub(1)).await.unwrap_or_default();
+    with_files(lines, &att.dir, att, known)
+}
+
+/// `lines`, with where their files are under the state directory `dir` and what those that
+/// have arrived hold.
+fn with_files(lines: Vec<LineView>, dir: &std::path::Path, att: &Attachments, known: &mut Known) -> Lines {
     let mut paths = Vec::new();
     let mut files = Vec::new();
     for a in lines.iter().filter_map(|l| l.line.attachment.as_ref()) {
-        let path = c.file_path(a);
+        let path = dir.join(&a.file);
         if !known.contains(&a.file)
             && path.exists()
             && let Ok(bytes) = att.read(&a.file)
@@ -347,6 +358,48 @@ async fn lines_from(c: &Client, id: &str, first: usize, att: &Attachments, known
         paths.push((a.file.clone(), path));
     }
     Lines { lines, paths, files }
+}
+
+/// The groups saved, with their lines, read from the state alone; none when it can't be read,
+/// which opening the client then says why.
+fn saved(cfg: &Config) -> Vec<(ChatView, Vec<LineView>)> {
+    let opts = Options { no_sync: cfg.no_sync, key: cfg.key.clone() };
+    let Ok(state) = Store::open(&cfg.state_dir, opts).and_then(|mut st| st.load(&cfg.name)) else {
+        return Vec::new();
+    };
+    state.chats.iter().map(|c| (view_of(c), c.log.iter().map(|l| line_of(c, l)).collect())).collect()
+}
+
+// shortcut: copies of the client's own private view_of and line_of, until it can read the state alone.
+fn view_of(c: &Chat) -> ChatView {
+    ChatView {
+        id: c.id.clone(),
+        name: c.name.clone(),
+        joined: c.group.is_some(),
+        me: c.group.as_ref().map(|g| g.me()).unwrap_or_default(),
+        code: c.joining.as_ref().map(|j| j.code.clone()).unwrap_or_default(),
+        minting: c.joining.as_ref().is_some_and(|j| j.code.is_empty()),
+        adding: c.inducting.is_some(),
+        members: c.group.as_ref().map_or_else(Vec::new, |g| {
+            g.readers
+                .keys()
+                .map(|k| MemberView { key: k.clone(), name: c.names.get(k).cloned().unwrap_or_else(|| "?".into()) })
+                .collect()
+        }),
+        unsent: c.jobs.len(),
+    }
+}
+
+fn line_of(c: &Chat, l: &Line) -> LineView {
+    let mine = l.notice.is_none() && c.group.as_ref().is_some_and(|g| g.me() == l.sender);
+    let from = if l.notice.is_some() {
+        String::new()
+    } else if mine {
+        "me".into()
+    } else {
+        c.names.get(&l.sender).cloned().unwrap_or_else(|| "?".into())
+    };
+    LineView { line: l.clone(), mine, acked: c.acknowledged(l), from }
 }
 
 struct Lines {
