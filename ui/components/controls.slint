@@ -1,12 +1,28 @@
 import { Theme } from "../theme.slint";
 import { Clock } from "../globals.slint";
 
-// A touch area that can sit in a scrolling list: once the finger has moved 8px up or down it lets
-// go, and the list scrolls. Without this a finger that rested first, as when it stops a fling, keeps
-// the touch area, because the list only takes a drag that starts within 500ms of the press.
+// Set while a finger is being handed from a touch area to the list under it.
+global ListDrag {
+    in-out property <bool> handing-off;
+}
+
+// A touch area that can sit in a scrolling list: once the finger has moved 8px up or down, every
+// such touch area lets go for a moment, and the list scrolls. Without this a finger that rested
+// first, as when it stops a fling, keeps the touch area, because the list only takes a drag that
+// starts within 500ms of the press. All of them, not just this one, let go because the move they
+// hand over may already be over another row, which would otherwise take it as a hover.
 export component ListTouch inherits TouchArea {
     in property <bool> active: true;
-    enabled: root.active && !(root.pressed && abs(root.mouse-y - root.pressed-y) > 8px);
+    enabled: root.active && !ListDrag.handing-off;
+    moved => {
+        if (abs(self.mouse-y - self.pressed-y) > 8px) { ListDrag.handing-off = true; }
+    }
+    // Any of them ends it, so it ends even when the row that started it has gone.
+    Timer {
+        interval: 250ms;
+        running: ListDrag.handing-off;
+        triggered => { ListDrag.handing-off = false; }
+    }
 }
 
 // Accepts activation only once its control has been visible, enabled, unmoved and about the

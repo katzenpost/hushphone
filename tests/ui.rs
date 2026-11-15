@@ -422,10 +422,11 @@ fn a_finger_that_stops_a_fling_and_rests_can_still_drag_the_list() {
         Some(caught),
         "the finger stopped the fling"
     );
+    // Its first move past the slop lands on another row, as a quick finger's can.
     let mut y = 300.0;
-    for _ in 0..20 {
+    for step in [80.0].into_iter().chain([10.0; 12]) {
         frames(1);
-        y += 10.0;
+        y += step;
         touch(y, Moved);
     }
     assert_eq!(
