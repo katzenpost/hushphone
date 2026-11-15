@@ -251,3 +251,37 @@ fn ping_reaches_the_group() {
     let alice_lines = &alice.chat(&g).1;
     assert!(alice_lines.iter().all(|l| l.line.notice.as_ref().is_none_or(|n| n.kind != NoticeKind::Pinged)), "no line for the sender");
 }
+
+/// Saved groups show at once, with their lines, though the daemon can't be reached.
+#[test]
+fn saved_groups_show_without_the_daemon() {
+    let w = World::default();
+    let key = Secret::new(&[9; 32]);
+    let state = dir("offline");
+    let mut fay = Peer::open(&w, "fay", state.clone(), Keys::Given(key.clone()));
+    fay.cmd.send(Cmd::Create("friends".into(), 1)).unwrap();
+    fay.wait("the group", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| c.0.joined)));
+    let g = fay.made.clone().unwrap();
+    fay.cmd.send(Cmd::Send(g.clone(), "saved".into())).unwrap();
+    fay.wait("the line", |p| p.chat(&g).1.iter().any(|l| l.line.text == "saved"));
+    drop(fay);
+    released(&state, &key);
+
+    let (tx, rx) = mpsc::channel();
+    let nowhere = state.join("no-daemon.sock").to_string_lossy().into_owned();
+    let params = Params { source: Source::Daemon(nowhere), state_dir: state, name: "fay".into(), keys: Keys::Given(key), wire_version: 4 };
+    let _cmd = backend::spawn(params, move |u| {
+        let _ = tx.send(u);
+    });
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let u = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).expect("the saved group, without the daemon");
+        if let Update::Chat { view, lines, .. } = u
+            && view.id == g
+        {
+            assert_eq!(view.name, "friends");
+            assert!(lines.iter().any(|l| l.line.text == "saved"));
+            break;
+        }
+    }
+}

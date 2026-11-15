@@ -450,6 +450,13 @@ impl App {
         match &self.cmd {
             Some(tx) => {
                 let _ = tx.send(c);
+                // Until the client is open, what is asked waits in the channel.
+                let waiting = self.ui.upgrade().is_some_and(|ui| {
+                    matches!(ui.global::<AppState>().get_connection(), Connection::Connecting | Connection::Unreachable)
+                });
+                if waiting {
+                    self.notice("Not connected yet: this is done once hushphone connects.", false);
+                }
             }
             None => self.notice("Not connected yet.", true),
         }
