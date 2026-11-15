@@ -21,7 +21,7 @@ use futures_util::FutureExt;
 use tokio::sync::mpsc;
 use zeroize::Zeroizing;
 
-use crate::keys::{self, Custody};
+use crate::keys;
 
 /// Where Pigeonhole is.
 #[derive(Clone)]
@@ -55,7 +55,7 @@ impl Source {
 /// How the state is kept at rest.
 #[derive(Clone)]
 pub enum Keys {
-    /// Sealed with a key the system keeps; unsealed, and the user told, when it can keep none.
+    /// Sealed with a key the system keeps; when it can keep none, the state is not opened.
     System,
     /// Unsealed: for tests.
     None,
@@ -88,10 +88,18 @@ impl Attachments {
         Attachments { dir, key }
     }
 
+    /// The key the files are sealed with; none only for tests.
+    pub fn key(&self) -> Option<Secret> {
+        self.key.clone()
+    }
+
     pub fn read(&self, file: &str) -> Result<Zeroizing<Vec<u8>>, ReadError> {
-        StoreFiles::new(self.dir.clone(), self.key.clone()).read(file).map(Zeroizing::new).map_err(|e| ReadError {
-            not_found: e.kind() == std::io::ErrorKind::NotFound,
-            what: e.to_string(),
+        StoreFiles::new(self.dir.clone(), self.key.clone()).read(file).map(Zeroizing::new).map_err(|e| {
+            let not_found = e.kind() == std::io::ErrorKind::NotFound;
+            // A file in a newer format is said to be one, not taken for one sealed with another key.
+            let kept = std::fs::read(self.dir.join(file)).unwrap_or_default();
+            let what = keys::check_sealed(&kept, file).err().unwrap_or_else(|| e.to_string());
+            ReadError { not_found, what }
         })
     }
 
@@ -162,8 +170,8 @@ pub enum Cmd {
 
 #[derive(Debug)]
 pub enum Update {
-    /// The state's files; and, when the state is not sealed, why not.
-    Files(Attachments, Option<String>),
+    /// The state's files, once the state is open.
+    Files(Attachments),
     /// The state cannot be opened, and the client will not start; why.
     Locked(String),
     Link(Link),
@@ -211,36 +219,15 @@ pub fn spawn(p: Params, tell: impl Fn(Update) + Send + Sync + 'static) -> mpsc::
     tx
 }
 
-/// The key the state is sealed with, after sealing it if it was not; `None` when it is to stay
-/// unsealed. The UI is given the state's files to read attachments with.
+/// The key the state is sealed with, after sealing it if it was not; `None` only for tests. The
+/// UI is given the state's files to read attachments with.
 async fn key(p: &Params, tell: &impl Fn(Update)) -> Result<Option<Secret>, String> {
-    let mut unsealed = None;
-    let key = match &p.keys {
-        Keys::None => None,
-        Keys::Given(k) => Some(k.clone()),
-        Keys::System => match keys::custody(&keys::System, &p.state_dir).await {
-            Custody::Sealed(k) => Some(k),
-            Custody::Unsealed(why) => {
-                unsealed = Some(why);
-                None
-            }
-            Custody::Lost(why) => return Err(lost(&p.state_dir, &why)),
-        },
-    };
+    let key = keys::open(&p.keys, &p.state_dir).await?;
     if let Some(k) = &key {
         keys::seal_existing(&p.state_dir, k).map_err(|e| format!("Couldn't seal your chats: {e}."))?;
     }
-    tell(Update::Files(Attachments::new(p.state_dir.clone(), key.clone()), unsealed));
+    tell(Update::Files(Attachments::new(p.state_dir.clone(), key.clone())));
     Ok(key)
-}
-
-fn lost(dir: &std::path::Path, why: &str) -> String {
-    let fix = if cfg!(target_os = "android") {
-        "To start over without them, clear hushphone's storage in Android's settings.".to_string()
-    } else {
-        format!("If it is gone for good, move {} aside to start over without them.", dir.display())
-    };
-    format!("Your chats are sealed, but their key can't be had: {why}. {fix}")
 }
 
 async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Update) + Send + Sync + 'static) {

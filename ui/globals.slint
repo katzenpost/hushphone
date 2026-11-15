@@ -134,8 +134,9 @@ export global AppState {
     in property <bool> adding;
     in property <bool> recording;
     in property <string> record-time;
-    // Why the state is stored unencrypted, when it is.
-    in property <string> at-rest-warning;
+    // Whether the key that seals the state is attested to stay deleted once deleted (rollback
+    // resistance): "yes", "no", or "checking…".
+    in property <string> key-deletion;
     in property <string> notice;
     in property <bool> notice-error;
     // The files directory, for the hints; empty where the system picks files instead.

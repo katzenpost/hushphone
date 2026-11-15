@@ -68,7 +68,8 @@ fn make_a_group_and_talk() {
         },
     );
     // --wire-version is saved for later starts, and the backend reads it from the settings.
-    assert_eq!(hushphone::settings::Settings::load(&data).0.wire_version, Some(3));
+    let at_rest = hushphone::backend::Attachments::new(data.join("state"), None);
+    assert_eq!(hushphone::settings::Settings::load(&at_rest).unwrap().unwrap().wire_version, Some(3));
     ui.show().unwrap();
     let weak = ui.as_weak();
     slint::spawn_local(async move {

@@ -84,7 +84,9 @@ struct App {
     effects: tokio::runtime::Runtime,
     chats: BTreeMap<ChatId, ChatState>,
     paths: HashMap<String, PathBuf>,
-    /// The state's files, opened if it is sealed; from the client's thread once it has the key.
+    /// Why the state cannot be opened, if it cannot: then nothing is read or written.
+    locked: Option<String>,
+    /// The state's files, sealed with its key; none while it is locked.
     attachments: Option<Attachments>,
     files: Files,
     current: Option<ChatId>,
@@ -131,21 +133,43 @@ fn later(f: impl FnOnce(&mut App) + Send + 'static) {
     });
 }
 
-pub fn start(ui: &AppWindow, setup: Setup) {
+pub fn start(ui: &AppWindow, mut setup: Setup) {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     if let Err(e) = crate::harden::data_dir(&setup.data_dir) {
         eprintln!("hushphone: can't restrict {}: {e}", setup.data_dir.display());
     }
-    let (mut settings, settings_note) = Settings::load(&setup.data_dir);
-    if settings.name.is_empty()
-        && let Some(n) = &setup.name
-    {
-        settings.name = text::name(n);
-        let _ = settings.save(&setup.data_dir);
+    let effects = tokio::runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().expect("effects runtime");
+    // The settings are sealed with the state, so its key comes first; without it, the defaults.
+    let state_dir = setup.data_dir.join("state");
+    let opened = effects.block_on(crate::keys::open(&setup.keys, &state_dir));
+    let attachments = opened.as_ref().ok().map(|k| Attachments::new(state_dir, k.clone()));
+    let (mut settings, settings_note) = match &attachments {
+        Some(f) => Settings::open(&setup.data_dir, f),
+        None => (Settings::default(), None),
+    };
+    let locked = opened.err();
+    if let Some(f) = &attachments {
+        setup.keys = f.key().map_or(Keys::None, Keys::Given);
+        let mut changed = false;
+        if settings.name.is_empty()
+            && let Some(n) = &setup.name
+        {
+            settings.name = text::name(n);
+            changed = true;
+        }
+        if setup.wire_version.is_some() && setup.wire_version != settings.wire_version {
+            settings.wire_version = setup.wire_version;
+            changed = true;
+        }
+        if changed {
+            let _ = settings.save(f);
+        }
     }
-    if setup.wire_version.is_some() && setup.wire_version != settings.wire_version {
-        settings.wire_version = setup.wire_version;
-        let _ = settings.save(&setup.data_dir);
+    #[cfg(target_os = "android")]
+    {
+        // Before the first frame, so no screenshot sees one the user wanted hidden.
+        crate::android::set_screen_security(settings.screen_security);
+        setup.source = crate::android::source(&settings, &setup.default_daemon);
     }
     if settings.daemon.is_empty() || setup.old_defaults.contains(&settings.daemon) {
         settings.daemon = setup.default_daemon.clone();
@@ -171,6 +195,7 @@ pub fn start(ui: &AppWindow, setup: Setup) {
     st.set_replica(settings.replica().into());
     st.set_screen_security(settings.screen_security);
     st.set_my_name(settings.name.clone().into());
+    st.set_key_deletion(key_deletion(&settings).into());
     ui.global::<Theme>().set_preference(match settings.theme {
         ThemeChoice::System => ThemePreference::System,
         ThemeChoice::Light => ThemePreference::Light,
@@ -183,14 +208,11 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         settings,
         contacts: Contacts::default(),
         cmd: None,
-        effects: tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()
-            .expect("effects runtime"),
+        effects,
         chats: BTreeMap::new(),
         paths: HashMap::new(),
-        attachments: None,
+        locked,
+        attachments,
         files: Files::default(),
         current: None,
         expanded: HashSet::new(),
@@ -219,7 +241,9 @@ pub fn start(ui: &AppWindow, setup: Setup) {
         if let Some(why) = settings_note {
             app.notice(&why, true);
         }
-        if app.settings.name.is_empty() {
+        #[cfg(target_os = "android")]
+        app.check_key_deletion();
+        if app.settings.name.is_empty() && app.locked.is_none() {
             if let Some(ui) = app.ui.upgrade() {
                 ui.set_overlay(Overlay::FirstRun);
             }
@@ -234,7 +258,9 @@ fn wire(ui: &AppWindow) {
     a.on_choose_name(|name| {
         with_app(|app| {
             app.settings.name = text::name(&name);
-            let _ = app.settings.save(&app.setup.data_dir);
+            if let Err(e) = app.save_settings() {
+                app.notice(&format!("Couldn't save your name: {e}"), true);
+            }
             app.state(|s| s.set_my_name(app.settings.name.clone().into()));
             app.connect();
         });
@@ -367,7 +393,7 @@ fn wire(ui: &AppWindow) {
                     _ => ThemeChoice::System,
                 };
             }
-            if let Err(e) = app.settings.save(&app.setup.data_dir) {
+            if let Err(e) = app.save_settings() {
                 app.notice(&format!("Couldn't save the settings: {e}"), true);
             }
         });
@@ -487,6 +513,11 @@ impl App {
         if self.cmd.is_some() {
             return;
         }
+        if let Some(why) = &self.locked {
+            self.state(|s| s.set_connection(Connection::Unreachable));
+            self.notice(why, true);
+            return;
+        }
         let source = match &self.setup.source {
             // An address on the command line wins over the one saved.
             Source::Daemon(a) if a.is_empty() => Source::Daemon(self.settings.daemon.clone()),
@@ -528,7 +559,7 @@ impl App {
 
     fn apply(&mut self, u: Update) {
         match u {
-            Update::Files(a, unsealed) => {
+            Update::Files(a) => {
                 match Contacts::load(&a) {
                     Ok(c) => self.contacts = c,
                     Err(e) => self.notice(&format!("Couldn't read your names for members: {e}"), true),
@@ -543,12 +574,9 @@ impl App {
                     if let Err(e) = self.save_contacts() {
                         self.notice(&format!("Couldn't move your names for members: {e}"), true);
                     } else {
-                        let _ = self.settings.save(&self.setup.data_dir);
+                        let _ = self.save_settings();
                     }
                 }
-                self.state(|s| s.set_at_rest_warning(unsealed.map_or_else(String::new, |why| {
-                    format!("Your chats are stored unencrypted on this device: {why}.")
-                }).into()));
             }
             Update::Locked(why) => {
                 self.state(|s| s.set_connection(Connection::Unreachable));
@@ -651,6 +679,29 @@ impl App {
                 self.notice(&format!("The client stopped: {e}. Opening it again."), true);
             }
         }
+    }
+
+    fn save_settings(&self) -> Result<(), String> {
+        match &self.attachments {
+            Some(a) => self.settings.save(a),
+            None => Err("the state is not open".into()),
+        }
+    }
+
+    /// Android: find out once, in the background, whether key deletion is enforced in hardware.
+    #[cfg(target_os = "android")]
+    fn check_key_deletion(&self) {
+        if self.settings.hardware_key_deletion.is_some() || self.attachments.is_none() {
+            return;
+        }
+        self.effects.spawn_blocking(|| {
+            let yes = crate::android::hardware_key_deletion();
+            later(move |app| {
+                app.settings.hardware_key_deletion = Some(yes);
+                let _ = app.save_settings();
+                app.state(|s| s.set_key_deletion(key_deletion(&app.settings).into()));
+            });
+        });
     }
 
     fn save_contacts(&self) -> Result<(), String> {
@@ -1238,6 +1289,15 @@ impl App {
 
 /// A line about a join to logcat, or stderr off Android, under `hushphone-join`: the group by a
 /// short hash of its local id, so the log names no group.
+/// The answer Settings shows to "Hardware-enforced key deletion".
+fn key_deletion(s: &Settings) -> &'static str {
+    match s.hardware_key_deletion {
+        Some(true) => "yes",
+        None if cfg!(target_os = "android") => "checking…",
+        _ => "no",
+    }
+}
+
 fn log_join(chat: &str, what: &str) {
     use sha2::Digest;
     let line = format!("group {} {what}", &hex::encode(sha2::Sha256::digest(chat))[..8]);
