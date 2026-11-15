@@ -1,4 +1,4 @@
-import { ListView, LineEdit, ComboBox, Spinner, Palette, Switch } from "std-widgets.slint";
+import { ListView, LineEdit, TextEdit, ComboBox, Spinner, Palette, Switch } from "std-widgets.slint";
 import { Theme, ThemePreference } from "theme.slint";
 import { AppState, Actions, Clock, ChatItem, LineItem, MemberItem, Connection, LineKind, Delivery } from "globals.slint";
 import { Stable, Icon, IconButton, IconSwitch, Button, Avatar, Badge } from "components/controls.slint";
@@ -758,6 +758,7 @@ component Conversation inherits Rectangle {
     callback members();
     callback invite();
     callback rename();
+    callback poll();
     callback clear();
     callback leave();
     background: Theme.bg;
@@ -888,6 +889,11 @@ component Conversation inherits Rectangle {
                     activated => { more.close(); root.rename(); }
                 }
                 if AppState.current-joined: MenuEntry {
+                    text: "New poll";
+                    icon: @image-url("icons/check.svg");
+                    activated => { more.close(); root.poll(); }
+                }
+                if AppState.current-joined: MenuEntry {
                     text: "Check for messages";
                     icon: @image-url("icons/search.svg");
                     activated => { more.close(); Actions.scan(); }
@@ -1003,6 +1009,50 @@ component NameDialog inherits Dialog {
             primary: true;
             enabled: !root.value.is-empty;
             activated => { root.submitted(root.value); }
+        }
+    }
+    init => { field.focus(); }
+}
+
+component PollDialog inherits Dialog {
+    in-out property <string> question;
+    in-out property <string> options;
+    in-out property <bool> availability;
+    callback submitted(string, string, bool);
+    panel-width: 460px;
+    VerticalLayout {
+        spacing: Theme.s2;
+        FieldLabel { text: "Question"; }
+        field := LineEdit { text <=> root.question; accessible-label: "Question"; }
+        FieldLabel { text: "Options, one to a line"; }
+        TextEdit {
+            text <=> root.options;
+            accessible-label: "Options";
+            min-height: 140px;
+            wrap: word-wrap;
+        }
+        HorizontalLayout {
+            spacing: Theme.s2;
+            Text {
+                text: "Let members answer maybe";
+                color: Theme.text;
+                font-size: Theme.fs-body;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Switch { checked <=> root.availability; accessible-label: "Let members answer maybe"; }
+        }
+        Hint { text: "Every member sees the poll, how each member voted and the count for each option, and answers yes or no to each, or yes, maybe or no when maybe is allowed. Only you can close it. katzenqt shows it too."; }
+    }
+    HorizontalLayout {
+        alignment: end;
+        spacing: Theme.s2;
+        Button { text: "Cancel"; activated => { root.dismissed(); } }
+        Button {
+            text: "Send poll";
+            primary: true;
+            enabled: !root.question.is-empty && !root.options.is-empty;
+            activated => { root.submitted(root.question, root.options, root.availability); }
         }
     }
     init => { field.focus(); }
@@ -1260,7 +1310,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, confirm-leave, confirm-clear, confirm-remove, confirm-join }
+export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, poll, confirm-leave, confirm-clear, confirm-remove, confirm-join }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1340,6 +1390,7 @@ export component AppWindow inherits Window {
                 members => { root.overlay = Overlay.members; }
                 invite => { root.overlay = Overlay.invite; }
                 rename => { root.overlay = Overlay.rename; }
+                poll => { root.overlay = Overlay.poll; }
                 clear => { root.overlay = Overlay.confirm-clear; }
                 leave => { root.overlay = Overlay.confirm-leave; }
             }
@@ -1483,6 +1534,14 @@ export component AppWindow inherits Window {
                 }
                 send(original) => {
                     Actions.send-picture(original);
+                    root.overlay = Overlay.none;
+                }
+            }
+            if root.overlay == Overlay.poll: PollDialog {
+                title: "New poll in " + AppState.current-name;
+                dismissed => { root.overlay = Overlay.none; }
+                submitted(q, o, m) => {
+                    Actions.create-poll(q, o, m);
                     root.overlay = Overlay.none;
                 }
             }

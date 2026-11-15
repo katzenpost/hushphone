@@ -45,6 +45,7 @@ fn dump(dir: &Path, ui: &AppWindow) -> String {
             LineKind::Notice => "notice",
             LineKind::File => "file",
             LineKind::Voice => "voice",
+            LineKind::Poll => "poll",
         };
         out.push_str(&format!(
             "LINE kind={k} mine={} from={} delivery={d} text={}\n",

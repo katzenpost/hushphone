@@ -10,7 +10,8 @@ use pigeonhole_protocols::protocols::katzenqt1::engine::{Notice, NoticeKind, Sta
 use crate::contacts::Contacts;
 use crate::text;
 use crate::voice;
-use crate::{ChatItem, Delivery, LineItem, LineKind, MemberItem};
+use pigeonhole_protocols::protocols::katzenqt1::tally::{Mode, Outcome, PollView, Polls, voter_id};
+use crate::{ChatItem, Delivery, LineItem, LineKind, MemberItem, PollOption};
 
 /// Lines from one sender within this long of each other share a name and avatar.
 const RUN: i64 = 5 * 60 * 1000;
@@ -174,6 +175,8 @@ pub fn line_item(
     item
 }
 
+/// The lines shown, a poll at the line that brought it with its votes counted, and the other
+/// lines of polls left out.
 pub fn line_items(
     lines: &[LineView],
     who: &HashMap<Vec<u8>, Who>,
@@ -181,12 +184,87 @@ pub fn line_items(
     expanded: &std::collections::HashSet<usize>,
     now: DateTime<Local>,
 ) -> Vec<LineItem> {
-    lines
+    // Our key is the sender of our own lines; with none, no poll is ours and we voted in none.
+    let me = lines.iter().find(|l| l.mine && l.line.notice.is_none()).map(|l| l.line.sender.clone()).unwrap_or_default();
+    let polls = Polls::from_lines(lines, &me);
+    let shown: Vec<&LineView> = lines.iter().filter(|l| polls.shows(&l.line)).collect();
+    shown
         .iter()
         .enumerate()
-        .map(|(i, l)| line_item(l, i.checked_sub(1).map(|p| &lines[p]), who, files, expanded.contains(&l.line.id), now))
+        .map(|(i, l)| {
+            let mut item = line_item(l, i.checked_sub(1).map(|p| shown[p]), who, files, expanded.contains(&l.line.id), now);
+            if let Some(v) = polls.at(l.line.id).and_then(|p| p.view()) {
+                poll_item(&mut item, &v, &polls.mine(l.line.id), &me, who, expanded.contains(&l.line.id));
+            }
+            item
+        })
         .collect()
 }
+
+/// A poll's line: its question, options with our marks and their counts, its outcome once
+/// closed, and, when `expanded`, how each member voted.
+fn poll_item(item: &mut LineItem, v: &PollView, mine: &[(String, String)], me: &[u8], who: &HashMap<Vec<u8>, Who>, expanded: bool) {
+    item.kind = LineKind::Poll;
+    item.text = text::identifier(&v.topic, 300).into();
+    item.collapsed = false;
+    item.poll_voters = v.ballots.len() as i32;
+    item.poll_closed = v.closed;
+    item.poll_availability = v.mode == Mode::Availability;
+    item.poll_can_close = !v.closed && !me.is_empty() && v.may_close(&voter_id(me));
+    let texts: HashMap<&str, String> = v.options.iter().map(|o| (o.id.as_str(), text::identifier(&o.text, 200))).collect();
+    let options: Vec<PollOption> = v
+        .options
+        .iter()
+        .map(|o| PollOption {
+            text: texts[o.id.as_str()].clone().into(),
+            yes: o.yes as i32,
+            maybe: o.maybe as i32,
+            mark: mine.iter().find(|(s, _)| *s == o.id).map(|(_, a)| a.clone()).unwrap_or_default().into(),
+        })
+        .collect();
+    item.poll_options = std::rc::Rc::new(slint::VecModel::from(options)).into();
+    if v.closed {
+        item.poll_outcome = match v.outcome() {
+            Outcome::Winner(w) => format!("Chosen: {}", text::identifier(&w, 200)),
+            Outcome::Tie(w) => format!("Tied: {}", w.iter().map(|w| text::identifier(w, 200)).collect::<Vec<_>>().join(" / ")),
+            Outcome::NoWinner => "No option had a yes.".into(),
+        }
+        .into();
+    }
+    if expanded {
+        let names: HashMap<[u8; 16], String> = who.iter().map(|(k, w)| (voter_id(k), w.shown.clone())).collect();
+        let mut rows: Vec<String> = v
+            .ballots
+            .iter()
+            .map(|b| {
+                let name = if !me.is_empty() && b.voter == voter_id(me) { "you".to_string() } else { names.get(&b.voter).cloned().unwrap_or_else(|| "a member no longer here".into()) };
+                let marks: Vec<String> = b.choice.iter().filter_map(|(s, a)| Some(format!("{} {a}", texts.get(s.as_str())?))).collect();
+                format!("{name}: {}", if marks.is_empty() { "nothing marked".into() } else { marks.join(", ") })
+            })
+            .collect();
+        rows.sort();
+        item.poll_ballots = if rows.is_empty() { "No votes yet.".to_string() } else { rows.join("\n") }.into();
+    }
+}
+
+/// A poll's question and options as typed, options one to a line, cleaned as names are; or why
+/// they make no poll.
+pub fn poll_text(question: &str, options: &str) -> Result<(String, Vec<String>), &'static str> {
+    let q = text::identifier(question, 300);
+    let o: Vec<String> = options.lines().map(|l| text::identifier(l, 200)).filter(|l| !l.is_empty()).collect();
+    if q.is_empty() {
+        Err("A poll needs a question.")
+    } else if o.len() < 2 {
+        Err("A poll needs at least two options, one to a line.")
+    } else if o.len() > MAX_POLL_OPTIONS {
+        Err("A poll has at most 20 options.")
+    } else {
+        Ok((q, o))
+    }
+}
+
+/// The most options a poll made here has.
+pub const MAX_POLL_OPTIONS: usize = 20;
 
 pub fn preview(l: &LineView, who: &HashMap<Vec<u8>, Who>) -> String {
     let from = if l.mine {
@@ -395,4 +473,13 @@ mod tests {
         let n = Notice { kind: NoticeKind::MemberAdded, args: vec!["bob\u{202E}x".into(), "carol".into()] };
         assert_eq!(notice_text(&n), "bobx added ~carol");
     }
+
+    #[test]
+    fn poll_text_is_checked() {
+        assert_eq!(poll_text("  Lunch? ", "Mon\n\n  Tue \n"), Ok(("Lunch?".into(), vec!["Mon".into(), "Tue".into()])));
+        assert!(poll_text("", "a\nb").is_err());
+        assert!(poll_text("q", "only one").is_err());
+        assert!(poll_text("q", &"x\n".repeat(MAX_POLL_OPTIONS + 1)).is_err());
+    }
+
 }

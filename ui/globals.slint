@@ -1,6 +1,14 @@
 export enum Connection { connecting, online, offline, unreachable }
 
-export enum LineKind { text, notice, file, voice }
+export enum LineKind { text, notice, file, voice, poll }
+
+// One option of a poll, counted; mark: what the user gave it, "yes", "maybe" or "no", or "".
+export struct PollOption {
+    text: string,
+    yes: int,
+    maybe: int,
+    mark: string,
+}
 
 // queued: not yet written; written: on the replicas; read: a member acknowledged it.
 export enum Delivery { none, queued, written, read }
@@ -44,6 +52,18 @@ export struct LineItem {
     // First of a run of lines from the same sender: shows the name and avatar.
     first: bool,
     collapsed: bool,
+    // A poll's options, in the order made; its question is the text.
+    poll-options: [PollOption],
+    poll-voters: int,
+    poll-closed: bool,
+    // Yes, maybe or no for each option, rather than yes or no.
+    poll-availability: bool,
+    // The user made it and it is open.
+    poll-can-close: bool,
+    // Once closed: what was chosen.
+    poll-outcome: string,
+    // Shown once expanded: how each member voted, a line each.
+    poll-ballots: string,
 }
 
 // A file in the send directory, for the user to pick to send.
@@ -148,6 +168,14 @@ export global Actions {
     callback toggle-radio();
     // Ask the current group's members to play their ping sound.
     callback ping();
+    // Send a poll to the current group: its question, its options one to a line, and whether
+    // members answer yes, maybe or no (availability) rather than yes or no (approval).
+    callback create-poll(string, string, bool);
+    // Move the user's mark on option index of the poll at line id to the next: none, yes,
+    // (maybe,) no, and none again.
+    callback vote(int, int);
+    // Close the poll at line id, which the user made.
+    callback close-poll(int);
     callback save-file(int);
     callback expand(int);
     callback copy-code();
