@@ -320,9 +320,19 @@ fn radio_mode_trades_the_chat_for_a_radio_and_back() {
     };
     assert_eq!(composer(&ui), 1);
     mock_elapsed_time(Duration::from_millis(600));
-    button(&ui, "Radio off: voice messages wait to be played").invoke_accessible_default_action();
+    let switch = |ui: &AppWindow, label: &str| {
+        let found: Vec<_> = ElementHandle::find_by_accessible_label(ui, label)
+            .filter(|e| e.accessible_role() == Some(i_slint_backend_testing::AccessibleRole::Switch))
+            .collect();
+        assert_eq!(found.len(), 1, "one switch labelled {label:?}");
+        found.into_iter().next().unwrap()
+    };
+    let off = switch(&ui, "Text and audio");
+    assert_eq!(off.accessible_checked(), Some(false));
+    off.invoke_accessible_default_action();
     assert_eq!(toggled.get(), 1);
     st.set_current_radio(true);
+    assert_eq!(switch(&ui, "Audio only").accessible_checked(), Some(true));
     st.set_radio_receiving(true);
     st.set_radio_talker("carol".into());
     assert_eq!(composer(&ui), 0);
