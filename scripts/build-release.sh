@@ -18,8 +18,7 @@ linux)
     name=hushphone-$version-linux-x86_64
     rm -rf "dist/$name"
     mkdir "dist/$name"
-    cp target/release/hushphone README.md LICENSE packaging/network.katzenpost.hushphone.desktop \
-        packaging/network.katzenpost.hushphone.svg "dist/$name/"
+    cp target/release/hushphone README.md LICENSE "dist/$name/"
     tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
         --mode=u+rw,go=rX -C dist -cf - "$name" | gzip -9n > "dist/$name.tar.gz"
     rm -rf "dist/$name"
