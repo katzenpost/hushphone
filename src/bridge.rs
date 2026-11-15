@@ -407,26 +407,33 @@ fn wire(ui: &AppWindow) {
         with_app(|app| app.notice("", false));
     });
     a.on_wipe(|| {
-        with_app(|app| {
-            // Nothing shows, nothing can be screenshotted, and the clipboard is empty.
+        let Some((data, cache, hardware)) = with_app(|app| {
+            // Nothing shows, and nothing can be done any more.
             if let Some(ui) = app.ui.upgrade() {
                 ui.set_overlay(Overlay::Wiping);
             }
+            app.cmd = None;
+            (app.setup.data_dir.clone(), app.setup.cache_dir.clone(), app.settings.hardware_key_deletion == Some(true))
+        }) else {
+            return;
+        };
+        // On a thread of its own: on Android the platform calls below can wait on the event
+        // loop, which is busy running this callback.
+        let _ = std::thread::Builder::new().name("wipe".into()).spawn(move || {
             #[cfg(target_os = "android")]
             crate::android::set_screen_security(true);
             let _ = effects::clear_clipboard(&UserIntent::new());
-        });
-        // Once the blank screen is drawn: the key, its wrapped copy and the state go, then the
-        // process. See crate::wipe.
-        slint::Timer::single_shot(Duration::from_millis(100), || {
-            with_app(|app| {
-                app.cmd = None;
-                let hardware = app.settings.hardware_key_deletion == Some(true);
-                app.effects.block_on(crate::wipe::wipe(&crate::keys::System, &app.setup.data_dir, &app.setup.cache_dir, hardware))
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build();
+            if let Ok(rt) = rt {
+                rt.block_on(crate::wipe::wipe(&crate::keys::System, &data, &cache, hardware));
+            }
+            // What the UI thread holds goes, the state's key with it: Secrets wipe their memory
+            // as they are freed. The rest goes with the process.
+            let _ = slint::invoke_from_event_loop(|| {
+                drop(APP.with(|a| a.borrow_mut().take()));
+                std::process::exit(0);
             });
-            // What this thread holds goes, the state's key with it: Secrets wipe their memory as
-            // they are freed. The rest goes with the process.
-            drop(APP.with(|a| a.borrow_mut().take()));
+            std::thread::sleep(Duration::from_secs(2));
             std::process::exit(0);
         });
     });

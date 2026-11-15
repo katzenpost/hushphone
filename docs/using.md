@@ -36,3 +36,9 @@
 - **Theme** follows the system, and is dark when the system does not say. Settings can fix it to light or dark.
 - **Screen security**, on Android, is off unless you turn it on in Settings; when on, hushphone's
   screens are hidden from screenshots, screen recordings and the recent-apps preview.
+- **Emergency wipe**, in the + menu, opens a large button: hold it for 2 seconds, until the ring
+  is full, and hushphone destroys the key that seals your groups, then the groups, messages,
+  contacts, settings and attachments, and closes. Let go sooner and nothing happens. The next
+  start says what was destroyed and how, then begins afresh. See the [security notes](SECURITY.md).
+  ![Emergency wipe: the ring fills while the button is held](wipe.png)
+  ![After a wipe: what was destroyed, and what the wipe does not cover](wiped.png)
