@@ -73,6 +73,12 @@ into it. One newcomer is added at a time; a second code is refused until this on
 
 ![Reading the voucher](vouchers/adding.png)
 
+Changed your mind, or the code was never minted? The ✕ beside it cancels the add while hushphone
+is still reading the voucher. The group stays as it was, and the same code can be added later. Once
+the group's keys are on their way to the newcomer it is too late, and a notice says so.
+
+![Cancelling an add: the ✕ in the header](vouchers/cancel-adding.png)
+
 A notice in the group marks the moment they are in. From then on they read everything said in the
 group. What was said before stays with those who were there.
 
@@ -88,7 +94,8 @@ or its code is out there waiting, and the ✕ cancels it, after asking you to co
 
 Cancelling deletes the voucher from your device. A member who adds its code afterwards adds nobody;
 to join after all, mint a new one. The **Cancel joining** button on the group's own page does the
-same thing.
+same thing. If a member's reply arrived just before, you are already in: the group stays, and a
+notice says there was nothing to cancel.
 
 ## If it goes wrong
 

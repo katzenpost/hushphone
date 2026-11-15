@@ -4924,7 +4924,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=0e4570be01eec51d78f12e8ab96b95afe02057d6#0e4570be01eec51d78f12e8ab96b95afe02057d6"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=f39ba0ce6afe51132da2a6f340938aa03cb9df2b#f39ba0ce6afe51132da2a6f340938aa03cb9df2b"
 dependencies = [
  "base64 0.22.1",
  "blake2",

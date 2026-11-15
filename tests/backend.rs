@@ -191,16 +191,49 @@ fn two_members_talk_and_send_voice() {
     bob.wait("bob's groups again", |p| p.chats.get(&bg).is_some_and(|c| c.1.iter().any(|l| l.line.text == "got it")));
 }
 
-/// Cancelling a join deletes the group and its voucher.
+/// Cancelling a join deletes the group and its voucher, for good.
 #[test]
 fn cancel_joining() {
     let w = World::default();
-    let mut dana = Peer::new(&w, "dana");
-    dana.cmd.send(Cmd::Join("friends".into(), 1)).unwrap();
+    let key = Secret::new(&[4; 32]);
+    let state = dir("dana");
+    let mut dana = Peer::open(&w, "dana", state.clone(), Keys::Given(key.clone()));
+    dana.cmd.send(Cmd::Create("other".into(), 1)).unwrap();
+    dana.wait("the other group", |p| p.made.is_some());
+    let other = dana.made.take().unwrap();
+    dana.cmd.send(Cmd::Join("friends".into(), 2)).unwrap();
     dana.wait("a voucher code", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| !c.0.code.is_empty())));
     let id = dana.made.clone().unwrap();
-    dana.cmd.send(Cmd::Leave(id.clone())).unwrap();
+    dana.cmd.send(Cmd::Cancel(id.clone())).unwrap();
     dana.wait("the group to go", |p| !p.chats.contains_key(&id));
+    assert!(dana.chats.contains_key(&other), "the cancel took another group");
+    drop(dana);
+    released(&state, &key);
+    // The saved groups are told all at once: once one is, the cancelled join would be too.
+    let mut dana = Peer::open(&w, "dana", state, Keys::Given(key));
+    dana.wait("the saved groups", |p| p.chats.contains_key(&other));
+    assert!(!dana.chats.contains_key(&id), "the cancelled join came back");
+}
+
+/// Cancelling an add stops it and leaves the group; a cancel with nothing under way says so.
+#[test]
+fn cancel_adding() {
+    use pigeonhole_protocols::protocols::katzenqt1::engine::{NoticeKind, voucher_code};
+    let w = World::default();
+    let mut erin = Peer::new(&w, "erin-add");
+    erin.cmd.send(Cmd::Create("friends".into(), 1)).unwrap();
+    erin.wait("the group", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| c.0.joined)));
+    let g = erin.made.clone().unwrap();
+    let noticed = |p: &Peer, k: NoticeKind| p.chat(&g).1.iter().any(|l| l.line.notice.as_ref().is_some_and(|n| n.kind == k));
+    // A voucher no one minted is read for until cancelled.
+    erin.cmd.send(Cmd::Invite(g.clone(), voucher_code(&[5; 32]))).unwrap();
+    erin.wait("the add to start", |p| p.chat(&g).0.adding);
+    erin.cmd.send(Cmd::Cancel(g.clone())).unwrap();
+    erin.wait("the add to stop", |p| !p.chat(&g).0.adding && noticed(p, NoticeKind::Cancelled));
+    assert!(erin.chat(&g).0.joined);
+    erin.cmd.send(Cmd::Cancel(g.clone())).unwrap();
+    erin.wait("nothing to cancel", |p| noticed(p, NoticeKind::NothingToCancel));
+    assert!(erin.chats.contains_key(&g));
 }
 
 /// The wire version in the params reaches the client: version 3 mints the map form voucher

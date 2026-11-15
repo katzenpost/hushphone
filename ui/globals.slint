@@ -189,6 +189,8 @@ export global Actions {
     callback listen();
     callback stop-listen();
     callback leave();
+    // Stop the current group's voucher exchange: joining it, or adding a member.
+    callback cancel-voucher();
     callback clear();
     callback rename(string);
     callback scan();

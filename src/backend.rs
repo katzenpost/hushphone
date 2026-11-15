@@ -154,6 +154,8 @@ pub enum Cmd {
     Scan(ChatId),
     Remove(ChatId, Vec<u8>),
     Leave(ChatId),
+    /// Stop the voucher exchange under way: a join not yet a group goes, an add stops.
+    Cancel(ChatId),
     Clear(ChatId),
     Rename(ChatId, String),
 }
@@ -571,6 +573,7 @@ async fn carry_out(c: &Client, cmd: Cmd, s: &mut Serving<'_>, tell: &impl Fn(Upd
         Cmd::Scan(id) => c.scan(&id).await?,
         Cmd::Remove(id, key) => c.remove(&id, key).await?,
         Cmd::Leave(id) => c.leave(&id).await?,
+        Cmd::Cancel(id) => c.cancel(&id).await?,
         Cmd::Clear(id) => {
             c.clear(&id).await?;
             send_chat(c, &id, 0, Vec::new(), s, tell).await;
