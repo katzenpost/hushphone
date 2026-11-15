@@ -546,19 +546,34 @@ component Composer inherits Rectangle {
                 horizontal-stretch: 1;
                 spacing: 2px;
                 Rectangle {
-                    height: min(140px, max(44px, input.preferred-height + 2 * Theme.s3));
+                    height: max(44px, field.height + 2 * Theme.s3);
                     border-radius: 22px;
                     background: Theme.raised;
                     border-width: input.has-focus ? 2px : 0px;
                     border-color: Theme.focus-ring;
                     clip: true;
-                    HorizontalLayout {
-                        padding-left: Theme.s4;
-                        padding-right: Theme.s4;
-                        padding-top: Theme.s3;
-                        padding-bottom: Theme.s3;
+                    // One line of the input's font, to keep the line being typed in view.
+                    line := Text { text: " "; font-size: Theme.fs-body; visible: false; }
+                    field := Flickable {
+                        x: Theme.s4;
+                        y: Theme.s3;
+                        width: parent.width - 2 * Theme.s4;
+                        height: min(140px - 2 * Theme.s3, input.preferred-height);
+                        content-height: input.preferred-height;
+                        // Fewer lines, or a send, leave no empty space scrolled into view.
+                        changed content-height => { self.content-y = max(self.content-y, self.height - self.content-height); }
                         input := TextInput {
+                            width: field.width;
+                            height: field.content-height;
                             text <=> root.draft;
+                            // Keep the line being typed in view once the field scrolls.
+                            cursor-position-changed(p) => {
+                                if (p.y + field.content-y < 0) {
+                                    field.content-y = -p.y;
+                                } else if (p.y + line.preferred-height + field.content-y > field.height) {
+                                    field.content-y = field.height - p.y - line.preferred-height;
+                                }
+                            }
                             enabled: AppState.current-joined;
                             single-line: false;
                             wrap: word-wrap;
@@ -575,6 +590,14 @@ component Composer inherits Rectangle {
                                 reject
                             }
                         }
+                    }
+                    if field.content-height > field.height: thumb := Rectangle {
+                        x: parent.width - Theme.s2 - self.width;
+                        y: field.y + field.height * (-field.content-y / field.content-height);
+                        width: 4px;
+                        height: field.height * field.height / field.content-height;
+                        border-radius: 2px;
+                        background: Theme.text-faint;
                     }
                     if root.draft.is-empty: Text {
                         x: Theme.s4;
