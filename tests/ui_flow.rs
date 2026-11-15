@@ -110,16 +110,13 @@ fn make_a_group_and_talk() {
 
         // A poll, made from the group's menu; a vote for an option, and taking it back.
         settled(&ui, "More for friends", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
-        settled(&ui, "New poll", AccessibleRole::Button).await;
-        // The menu is a popup, whose entries the test backend does not activate; tests/ui.rs opens
-        // dialogs the same way.
-        ui.set_overlay(Overlay::Poll);
-        until("the poll dialog", || find(&ui, "Send poll", AccessibleRole::Button).is_some()).await;
+        // An entry shown only in a joined group, which once closed the menu and with it its own
+        // handler, before it opened the dialog.
+        settled(&ui, "New poll", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
+        until("the poll dialog", || ui.get_overlay() == Overlay::Poll && find(&ui, "Send poll", AccessibleRole::Button).is_some()).await;
         typed(&ui, "LineEdit", "Lunch: which day?");
         typed(&ui, "TextEdit", "Monday\nTuesday\n");
-        // In the dialog and the poll, the test backend's clicks land elsewhere; the controls' own
-        // actions go through the same settling and handlers.
-        settled(&ui, "Send poll", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Send poll", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         let poll = || st.get_lines().iter().find(|l| l.kind == LineKind::Poll);
         until("the poll", || poll().is_some_and(|p| p.delivery == Delivery::Written)).await;
         let p = poll().unwrap();
@@ -128,16 +125,16 @@ fn make_a_group_and_talk() {
         assert_eq!(counts(&p), vec![("Monday".into(), 0, "".into()), ("Tuesday".into(), 0, "".into())]);
         assert!(!p.poll_availability && p.poll_can_close);
         // A tap marks yes, the next no, the next nothing.
-        settled(&ui, "Tuesday, 0 yes, not marked", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Tuesday, 0 yes, not marked", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         until("the vote", || poll().is_some_and(|p| p.poll_voters == 1 && counts(&p)[1] == ("Tuesday".into(), 1, "yes".into()))).await;
-        settled(&ui, "Tuesday, 1 yes, you said yes", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Tuesday, 1 yes, you said yes", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         until("the no", || poll().is_some_and(|p| counts(&p)[1] == ("Tuesday".into(), 0, "no".into()))).await;
-        settled(&ui, "Tuesday, 0 yes, you said no", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Tuesday, 0 yes, you said no", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         until("the vote taken back", || poll().is_some_and(|p| counts(&p)[1] == ("Tuesday".into(), 0, "".into()))).await;
         // Who voted what; then its maker closes it, and it says what was chosen.
-        settled(&ui, "Show who voted", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Show who voted", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         until("the ballots", || poll().is_some_and(|p| p.poll_ballots == "you: nothing marked")).await;
-        settled(&ui, "Close poll", AccessibleRole::Button).await.invoke_accessible_default_action();
+        settled(&ui, "Close poll", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         until("the close", || poll().is_some_and(|p| p.poll_closed && p.poll_outcome == "No option had a yes." && !p.poll_can_close)).await;
         // Votes are not lines of their own.
         assert_eq!(st.get_lines().iter().filter(|l| l.kind == LineKind::Text && l.text.contains("vote")).count(), 0);

@@ -259,17 +259,17 @@ component Sidebar inherits Rectangle {
                 MenuEntry {
                     text: "New group";
                     icon: @image-url("icons/plus.svg");
-                    activated => { menu.close(); root.new-group(); }
+                    activated => { root.new-group(); menu.close(); }
                 }
                 MenuEntry {
                     text: "Join a group";
                     icon: @image-url("icons/join.svg");
-                    activated => { menu.close(); root.join-group(); }
+                    activated => { root.join-group(); menu.close(); }
                 }
                 MenuEntry {
                     text: "Pending vouchers";
                     icon: @image-url("icons/clock.svg");
-                    activated => { menu.close(); root.pending(); }
+                    activated => { root.pending(); menu.close(); }
                 }
             }
         }
@@ -889,33 +889,35 @@ component Conversation inherits Rectangle {
             border-color: Theme.divider;
             drop-shadow-blur: 16px;
             drop-shadow-color: #00000040;
+            // Each entry acts before closing the menu: closing it drops an entry under `if`, and
+            // with it the rest of that entry's handler.
             VerticalLayout {
                 padding: Theme.s1;
                 MenuEntry {
                     text: "Rename";
                     icon: @image-url("icons/settings.svg");
-                    activated => { more.close(); root.rename(); }
+                    activated => { root.rename(); more.close(); }
                 }
                 if AppState.current-joined: MenuEntry {
                     text: "New poll";
                     icon: @image-url("icons/check.svg");
-                    activated => { more.close(); root.poll(); }
+                    activated => { root.poll(); more.close(); }
                 }
                 if AppState.current-joined: MenuEntry {
                     text: "Check for messages";
                     icon: @image-url("icons/search.svg");
-                    activated => { more.close(); Actions.scan(); }
+                    activated => { Actions.scan(); more.close(); }
                 }
                 if AppState.current-joined: MenuEntry {
                     text: "Clear history";
                     icon: @image-url("icons/close.svg");
-                    activated => { more.close(); root.clear(); }
+                    activated => { root.clear(); more.close(); }
                 }
                 MenuEntry {
                     text: AppState.current-joined ? "Leave group" : "Cancel joining";
                     icon: @image-url("icons/join.svg");
                     danger: true;
-                    activated => { more.close(); root.leave(); }
+                    activated => { root.leave(); more.close(); }
                 }
             }
         }

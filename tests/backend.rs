@@ -318,3 +318,76 @@ fn saved_groups_show_without_the_daemon() {
         }
     }
 }
+
+/// A poll made by one member reaches the others, who vote and change their votes; its maker
+/// closes it; every member counts the same, as the app shows it.
+#[test]
+fn a_poll_reaches_every_member() {
+    use pigeonhole_protocols::protocols::katzenqt1::tally::{self, Polls};
+    let w = World::default();
+    let names = ["alice-poll", "bob-poll", "carol-poll"];
+    let mut peers: Vec<Peer> = names.iter().map(|n| Peer::new(&w, n)).collect();
+    peers[0].cmd.send(Cmd::Create("friends".into(), 1)).unwrap();
+    peers[0].wait("the group", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| c.0.joined)));
+    let mut ids = vec![peers[0].made.clone().unwrap()];
+    for i in 1..3 {
+        peers[i].cmd.send(Cmd::Join("friends".into(), 1)).unwrap();
+        peers[i].wait("a voucher code", |p| p.made.as_ref().is_some_and(|id| p.chats.get(id).is_some_and(|c| !c.0.code.is_empty())));
+        let id = peers[i].made.clone().unwrap();
+        let code = peers[i].chat(&id).0.code.clone();
+        peers[0].cmd.send(Cmd::Invite(ids[0].clone(), code)).unwrap();
+        peers[i].wait("the join", |p| p.chat(&id).0.joined);
+        ids.push(id);
+    }
+    for (p, id) in peers.iter_mut().zip(&ids) {
+        p.wait("every member", |p| p.chat(id).0.members.len() == 2);
+    }
+
+    // What each member's app shows of the poll: options' (text, yes, mark), and whether closed.
+    let shown = |p: &Peer, id: &str| {
+        let (view, lines) = p.chat(id).clone();
+        let who = model::names(&view, &Contacts::default(), "me");
+        let items = model::line_items(&lines, &who, &Files::default(), &Default::default(), chrono::Local::now());
+        items.iter().find(|i| i.kind == LineKind::Poll).map(|i| {
+            use slint::Model;
+            (i.poll_options.iter().map(|o| (o.text.to_string(), o.yes, o.mark.to_string())).collect::<Vec<_>>(), i.poll_voters, i.poll_closed)
+        })
+    };
+    // The line a member's app shows the poll at, and its polls, as the bridge reads them.
+    let polls = |p: &Peer, id: &str| {
+        let (view, lines) = p.chat(id);
+        let polls = Polls::from_lines(lines, &view.me);
+        let at = lines.iter().map(|l| l.line.id).find(|&l| polls.at(l).is_some());
+        (polls, at)
+    };
+
+    let opts = vec!["Mon".to_string(), "Tue".to_string()];
+    let me = peers[0].chat(&ids[0]).0.me.clone();
+    peers[0].cmd.send(Cmd::Tally(ids[0].clone(), tally::create(&[7; 16], "Lunch?", tally::Mode::Approval, &opts, &me))).unwrap();
+    for (p, id) in peers.iter_mut().zip(&ids) {
+        p.wait("the poll", |p| shown(p, id).is_some());
+    }
+
+    // Bob says yes to Tue; carol yes to Mon, then changes it to no.
+    let vote = |p: &mut Peer, id: &str, index: usize| {
+        let (polls, at) = polls(p, id);
+        let t = polls.cycle(at.unwrap(), index).unwrap();
+        p.cmd.send(Cmd::Tally(id.to_string(), t)).unwrap();
+    };
+    vote(&mut peers[1], &ids[1], 1);
+    peers[1].wait("bob's own vote", |p| shown(p, &ids[1]).unwrap().0[1] == ("Tue".into(), 1, "yes".into()));
+    vote(&mut peers[2], &ids[2], 0);
+    peers[2].wait("carol's own vote", |p| shown(p, &ids[2]).unwrap().0[0] == ("Mon".into(), 1, "yes".into()));
+    vote(&mut peers[2], &ids[2], 0);
+    peers[2].wait("carol's change", |p| shown(p, &ids[2]).unwrap().0[0] == ("Mon".into(), 0, "no".into()));
+    for (p, id) in peers.iter_mut().zip(&ids) {
+        p.wait("both votes", |p| shown(p, id).is_some_and(|(o, voters, _)| voters == 2 && o[0].1 == 0 && o[1].1 == 1));
+    }
+
+    // Alice closes it.
+    let (polls0, at0) = polls(&peers[0], &ids[0]);
+    peers[0].cmd.send(Cmd::Tally(ids[0].clone(), polls0.close(at0.unwrap()).unwrap())).unwrap();
+    for (p, id) in peers.iter_mut().zip(&ids) {
+        p.wait("the close", |p| shown(p, id).is_some_and(|(_, _, closed)| closed));
+    }
+}
