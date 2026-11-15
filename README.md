@@ -14,7 +14,25 @@ hushphone is a client. It does no mixnet networking itself: on the mixnet it nee
 `kpclientd`, and on the mesh it needs a Pigeonhole replica's address. There are no accounts:
 members join a group with a voucher, shown as a QR code or sent by sound.
 
-## Quick start
+## Install a release
+
+The [latest release](https://github.com/katzenpost/hushphone/releases/latest) has these files.
+
+- **Android**: the `arm64-v8a` APK (`x86_64` for an emulator), and for the mixnet
+  [kpclientd-android](https://github.com/katzenpost/kpclientd-android) too; see
+  [docs/android.md](docs/android.md). [Obtainium](https://github.com/ImranR98/Obtainium) can
+  install and update it from this repository with the APK filter `arm64-v8a\.apk$`.
+- **Debian 13 and Ubuntu 24.04**: `sudo apt install ./hushphone-*-debian-13-amd64.deb` (or
+  `ubuntu-24.04`). Its AppArmor profile allows no IP sockets; for the mesh, add the TCP lines
+  its [head comment](packaging/apparmor/hushphone) gives.
+- **Linux tarball**: `hushphone-<version>-linux-x86_64.tar.gz` holds the `hushphone` binary.
+- **Verifying**: with `SHA256SUMS` beside the files, run `sha256sum --ignore-missing -c SHA256SUMS`.
+
+On the mesh, through namenlos's bridge replica, run
+`hushphone --transport reticulum --replica 162.220.11.225:4242`. On the mixnet, start `kpclientd`
+and run `hushphone`.
+
+## Build from source
 
 Linux, on the mesh, through namenlos's bridge replica. You need [Rust](https://rustup.rs).
 
@@ -25,10 +43,7 @@ cargo run --release -- --transport reticulum --replica 162.220.11.225:4242
 ```
 
 On the mixnet instead, start `kpclientd` and run `cargo run --release`; see
-[docs/building.md](docs/building.md). On Android, install the APK from the
-[releases](https://github.com/katzenpost/hushphone/releases), and for the mixnet
-[kpclientd-android](https://github.com/katzenpost/kpclientd-android) too; see
-[docs/android.md](docs/android.md). To build the APK yourself, see
+[docs/building.md](docs/building.md). To build the APK, see
 [docs/building.md](docs/building.md#android-apk).
 
 ## Documentation
@@ -51,10 +66,7 @@ taken from ggwave-rs and pigeonhole_reticulous.
 
 ## Testing and licence
 
-```sh
-make check test
-```
-
-The tests cover the model, two clients joining and talking over an in-memory Pigeonhole, the
-window and the seccomp sandbox. `tests/namenlos_interop.rs` runs against a live `kpclientd` and
-only when `HUSH_INTEROP` is set. AGPL-3.0-only; see [LICENSE](LICENSE).
+`make check test` runs the tests. They cover the model, two clients joining and talking over an
+in-memory Pigeonhole, the window and the seccomp sandbox. `tests/namenlos_interop.rs` runs
+against a live `kpclientd` and only when `HUSH_INTEROP` is set. AGPL-3.0-only; see
+[LICENSE](LICENSE).
