@@ -30,10 +30,14 @@ static SECURE: AtomicBool = AtomicBool::new(false);
 /// let them in. The platform applies it on the UI thread, so it may be called from any.
 pub fn set_screen_security(on: bool) {
     SECURE.store(on, Ordering::Relaxed);
-    if let Some(app) = APP.get() {
+    if let Some(app) = APP.get().cloned() {
         let s = WindowManagerFlags::SECURE;
         let none = WindowManagerFlags::empty();
-        if on { app.set_window_flags(s, none) } else { app.set_window_flags(none, s) }
+        // From a thread of its own: set_window_flags takes the activity's lock, which the event
+        // loop holds while Slint's callbacks run, so called from one of those it never returned.
+        let _ = std::thread::Builder::new().name("window-flags".into()).spawn(move || {
+            if on { app.set_window_flags(s, none) } else { app.set_window_flags(none, s) }
+        });
     }
 }
 
