@@ -46,10 +46,17 @@ whatever other members send is untrusted.
   keeps for hushphone. All that can be seen on disk is how many files there are, how large, and
   their names.
   - On Linux, the key is kept in the session's keyring (the Secret Service: GNOME Keyring or
-    KWallet), which unlocks when you log in. With no keyring running, hushphone keeps its state
-    unsealed and says so in a strip under the group list.
+    KWallet), which unlocks when you log in. With no keyring running, hushphone says why and does
+    not open the state: it never keeps it unsealed.
   - On Android, the key is wrapped by an AES key held in Android's Keystore, in StrongBox where the
-    phone has one, and never leaves it.
+    phone has one, and never leaves it. If the Keystore cannot keep a key, hushphone says why and
+    does not open the state. Settings shows whether the phone's key attestation lists rollback
+    resistance among the hardware-enforced properties ("Hardware-enforced key deletion"): an app
+    cannot ask for it, and an AES key has no attestation, so an EC key made the same way is
+    attested and deleted to find out.
+  - `state.key` (Android) starts with `HPKEY` and a format version, authenticated with the
+    wrapped key; sealed files start with `PHSTATE` and theirs. Both are read before any key is
+    asked for: a format from a newer hushphone is reported as such, and nothing is changed.
   - A copy of the files, from a backup or a lost disk, cannot be read without that key. Someone
     who can run programs as you while you are logged in (or as hushphone, on an unlocked phone)
     can ask for the key, as hushphone does.
@@ -60,9 +67,12 @@ whatever other members send is untrusted.
     cache; it is wiped the next time and when hushphone starts.
   - An older, unsealed state is sealed the first time hushphone starts with a key. The unsealed
     copy is written over and removed, but flash storage may still hold its old blocks.
-- **On disk.** Settings (your name, the daemon's address, the theme, the wire version, and on Android the transport and replica) are written with mode 0600
-  and are not sealed. The names you give members, with their keys, and what you have read are a
-  contact list, so they are kept with the state, sealed when it is. A file you save is written
+- **On disk.** Settings (your name, the daemon's address, the theme, the wire version, and on
+  Android the transport, replica and Screen security) are sealed with the state, in
+  `state/settings.toml`; until the state is open, the defaults stand. An older version's plain
+  `settings.toml` is moved in at the first start, then written over and removed. The names you
+  give members, with their keys, and what you have read are a contact list, so they are kept
+  with the state, sealed too. A file you save is written
   out plain in `~/hushphone/received`, since that is what saving is for. Logs hold no message
   text.
 - **Sandboxed.** On the mixnet, kpclientd does all the networking, so hushphone needs very little
@@ -188,7 +198,7 @@ Data that passes through only briefly, or has to be an ordinary `Vec` for anothe
 
 ### Around the process
 
-Wiping memory matters little if the whole process can be read. `harden::process` (item 1) prevents core dumps and ptrace or `/proc/<pid>/mem` access from the user's other processes. `harden::data_dir` makes the data directory owner-only. On Android, the user may opt in to Screen security in Settings: `FLAG_SECURE` then keeps the app, and its QR scanner, out of screenshots, screen recordings and the recent-apps thumbnails. It is off by default, since screenshots are useful; it takes effect at once and is kept in `settings.toml`. A seccomp filter on every thread, and on Debian the AppArmor profile in `packaging/apparmor`, keep it from starting programs or tracing and reading other processes (see What hushphone does above). The seccomp filter is not optional: if it cannot be applied, the app does not connect to the daemon. The AppArmor profile also keeps the app off everything on the session bus but the keyring, since the user's systemd and the portals would otherwise start programs and open files for it, and off every unix socket but the daemon's, the display's and the sound server's.
+Wiping memory matters little if the whole process can be read. `harden::process` (item 1) prevents core dumps and ptrace or `/proc/<pid>/mem` access from the user's other processes. `harden::data_dir` makes the data directory owner-only. On Android, the user may opt in to Screen security in Settings: `FLAG_SECURE` then keeps the app, and its QR scanner, out of screenshots, screen recordings and the recent-apps thumbnails. It is off by default, since screenshots are useful; it takes effect at once and is kept in the sealed settings. A seccomp filter on every thread, and on Debian the AppArmor profile in `packaging/apparmor`, keep it from starting programs or tracing and reading other processes (see What hushphone does above). The seccomp filter is not optional: if it cannot be applied, the app does not connect to the daemon. The AppArmor profile also keeps the app off everything on the session bus but the keyring, since the user's systemd and the portals would otherwise start programs and open files for it, and off every unix socket but the daemon's, the display's and the sound server's.
 
 ## Known gaps
 

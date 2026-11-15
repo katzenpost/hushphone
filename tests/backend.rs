@@ -83,10 +83,7 @@ impl Peer {
                         e.1.extend(lines);
                     }
                 }
-                Update::Files(a, unsealed) => {
-                    assert_eq!(unsealed, None);
-                    self.attachments = Some(a);
-                }
+                Update::Files(a) => self.attachments = Some(a),
                 Update::Locked(why) => self.locked = Some(why),
                 Update::Made(id, _) => self.made = Some(id),
                 Update::Removed(id) => {

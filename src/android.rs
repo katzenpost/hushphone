@@ -58,28 +58,16 @@ fn android_main(app: AndroidApp) {
     // On the mixnet, the thin client dials a unix socket in the app's private directory, where
     // each connection is joined to one kpclientd-android hands out: no other app can reach it.
     // On the mesh, the app dials the replica over TCP itself.
-    let relay = data.join("kpclientd.sock");
-    // Read without Settings::load, which would move a broken file aside before the app can say so.
-    let settings: crate::settings::Settings = std::fs::read_to_string(crate::settings::Settings::path(&data))
-        .ok()
-        .and_then(|t| toml::from_str(&t).ok())
-        .unwrap_or_default();
-    // Before the first frame, so no screenshot sees one the user wanted hidden.
-    set_screen_security(settings.screen_security);
-    let source = if settings.transport == "reticulum" {
-        Source::Mesh(settings.replica().to_string(), crate::mesh::BOX_SIZE)
-    } else {
-        start_relay(relay.clone());
-        // Always the relay: it is part of the app, not a setting, and its place has moved before.
-        Source::Daemon(relay.to_string_lossy().into_owned())
-    };
+    // The settings are sealed with the state: the bridge picks the transport, with source(),
+    // once the state is open.
+    let relay = data.join("kpclientd.sock").to_string_lossy().into_owned();
     let setup = crate::Setup {
         cache_dir: data.join("cache"),
         // Unused here: the system's document picker stands in for the files directory.
         files_dir: data.join("files"),
         data_dir: data,
-        source,
-        default_daemon: relay.to_string_lossy().into_owned(),
+        source: Source::Daemon(relay.clone()),
+        default_daemon: relay,
         name: None,
         wire_version: None,
         old_defaults: vec![OLD_DAEMON.into()],
@@ -88,6 +76,18 @@ fn android_main(app: AndroidApp) {
     };
     if let Err(e) = crate::run(setup) {
         eprintln!("hushphone: {e}");
+    }
+}
+
+/// How Pigeonhole is reached as `settings` say: the mesh, or the mixnet through the relay at
+/// `relay`, started here.
+pub fn source(settings: &crate::settings::Settings, relay: &str) -> Source {
+    if settings.transport == "reticulum" {
+        Source::Mesh(settings.replica().to_string(), crate::mesh::BOX_SIZE)
+    } else {
+        start_relay(relay.into());
+        // Always the relay: it is part of the app, not a setting, and its place has moved before.
+        Source::Daemon(relay.into())
     }
 }
 
@@ -547,14 +547,23 @@ fn private_dir(app: &AndroidApp) -> PathBuf {
 /// The Keystore's name for the key that wraps the state's key.
 const STATE_KEY: &str = "hushphone-state";
 
-/// The Keystore's AES key that wraps the state's key, made if `make` and there is none. It never
-/// leaves the Keystore: in StrongBox where the phone has one, else in its TEE.
-fn keystore_key<'a>(env: &mut jni::JNIEnv<'a>, make: bool) -> jni::errors::Result<Option<JObject<'a>>> {
+/// The Keystore's key that only probes what the Keystore attests; made and deleted at once.
+const PROBE: &str = "hushphone-probe";
+
+/// The Android Keystore, loaded.
+fn keystore<'a>(env: &mut jni::JNIEnv<'a>) -> jni::errors::Result<JObject<'a>> {
     let kind = env.new_string("AndroidKeyStore")?;
     let ks = env
         .call_static_method("java/security/KeyStore", "getInstance", "(Ljava/lang/String;)Ljava/security/KeyStore;", &[JValue::Object(&kind)])?
         .l()?;
     env.call_method(&ks, "load", "(Ljava/security/KeyStore$LoadStoreParameter;)V", &[JValue::Object(&JObject::null())])?;
+    Ok(ks)
+}
+
+/// The Keystore's AES key that wraps the state's key, made if `make` and there is none. It never
+/// leaves the Keystore: in StrongBox where the phone has one, else in its TEE.
+fn keystore_key<'a>(env: &mut jni::JNIEnv<'a>, make: bool) -> jni::errors::Result<Option<JObject<'a>>> {
+    let ks = keystore(env)?;
     let alias = env.new_string(STATE_KEY)?;
     let key = env
         .call_method(&ks, "getKey", "(Ljava/lang/String;[C)Ljava/security/Key;", &[JValue::Object(&alias), JValue::Object(&JObject::null())])?
@@ -578,9 +587,10 @@ fn keystore_key<'a>(env: &mut jni::JNIEnv<'a>, make: bool) -> jni::errors::Resul
     Err(last.unwrap())
 }
 
+const BUILDER: &str = "android/security/keystore/KeyGenParameterSpec$Builder";
+const RETURNS: &str = "Landroid/security/keystore/KeyGenParameterSpec$Builder;";
+
 fn generate_key<'a>(env: &mut jni::JNIEnv<'a>, strongbox: bool, unlocked: bool) -> jni::errors::Result<JObject<'a>> {
-    const BUILDER: &str = "android/security/keystore/KeyGenParameterSpec$Builder";
-    const RETURNS: &str = "Landroid/security/keystore/KeyGenParameterSpec$Builder;";
     let alias = env.new_string(STATE_KEY)?;
     // PURPOSE_ENCRYPT | PURPOSE_DECRYPT
     let b = env.new_object(BUILDER, "(Ljava/lang/String;I)V", &[JValue::Object(&alias), JValue::Int(3)])?;
@@ -611,8 +621,9 @@ fn generate_key<'a>(env: &mut jni::JNIEnv<'a>, strongbox: bool, unlocked: bool) 
     env.call_method(&kg, "generateKey", "()Ljavax/crypto/SecretKey;", &[])?.l()
 }
 
-/// AES-GCM through the Keystore's key: `iv` given to decrypt, made by the Keystore to encrypt.
-fn keystore_cipher<'a>(env: &mut jni::JNIEnv<'a>, key: &JObject, iv: Option<&[u8]>) -> jni::errors::Result<JObject<'a>> {
+/// AES-GCM through the Keystore's key: `iv` given to decrypt, made by the Keystore to encrypt;
+/// `aad` authenticated alongside.
+fn keystore_cipher<'a>(env: &mut jni::JNIEnv<'a>, key: &JObject, iv: Option<&[u8]>, aad: &[u8]) -> jni::errors::Result<JObject<'a>> {
     let name = env.new_string("AES/GCM/NoPadding")?;
     let c = env
         .call_static_method("javax/crypto/Cipher", "getInstance", "(Ljava/lang/String;)Ljavax/crypto/Cipher;", &[JValue::Object(&name)])?
@@ -632,6 +643,10 @@ fn keystore_cipher<'a>(env: &mut jni::JNIEnv<'a>, key: &JObject, iv: Option<&[u8
             )?;
         }
     }
+    if !aad.is_empty() {
+        let aad = env.byte_array_from_slice(aad)?;
+        env.call_method(&c, "updateAAD", "([B)V", &[JValue::Object(&aad)])?;
+    }
     Ok(c)
 }
 
@@ -645,19 +660,16 @@ fn through<'a>(env: &mut jni::JNIEnv<'a>, c: &JObject, input: &[u8]) -> jni::err
     Ok(bytes)
 }
 
-/// Wrap the state's key with the Keystore's, and keep it in `file`: the IV's length, the IV, and
-/// the wrapped key.
+/// Wrap the state's key with the Keystore's, and keep it in `file`, in the format
+/// [`crate::keys::read_kept_key`] reads.
 pub fn wrap_state_key(file: &std::path::Path, key: &[u8]) -> Result<(), String> {
     let kept = with_activity(|env, _| {
         let k = keystore_key(env, true)?.expect("made");
-        let c = keystore_cipher(env, &k, None)?;
+        let c = keystore_cipher(env, &k, None, &crate::keys::key_header())?;
         let iv: jni::objects::JByteArray = env.call_method(&c, "getIV", "()[B", &[])?.l()?.into();
         let iv = env.convert_byte_array(&iv)?;
         let wrapped = through(env, &c, key)?;
-        let mut out = vec![iv.len() as u8];
-        out.extend(&iv);
-        out.extend(wrapped.iter());
-        Ok(out)
+        Ok(crate::keys::write_kept_key(&iv, &wrapped))
     })
     .map_err(|e| format!("the Android Keystore refused to keep a key: {e}"))?;
     let tmp = file.with_extension("tmp");
@@ -678,14 +690,97 @@ pub fn unwrap_state_key(file: &std::path::Path) -> Result<Option<pigeonhole_prot
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(e.to_string()),
     };
-    let n = *kept.first().ok_or("the kept key is empty")? as usize;
-    let (iv, wrapped) = kept[1..].split_at_checked(n).ok_or("the kept key is cut short")?;
+    let (aad, iv, wrapped, old) = match crate::keys::read_kept_key(&kept)? {
+        crate::keys::KeptKey::Current { header, iv, wrapped } => (header, iv, wrapped, false),
+        crate::keys::KeptKey::V1 { iv, wrapped } => (&[][..], iv, wrapped, true),
+    };
     let key = with_activity(|env, _| {
         let Some(k) = keystore_key(env, false)? else { return Ok(None) };
-        let c = keystore_cipher(env, &k, Some(iv))?;
+        let c = keystore_cipher(env, &k, Some(iv), aad)?;
         through(env, &c, wrapped).map(Some)
     })
     .map_err(|e| format!("the Android Keystore would not unwrap the key: {e}"))?
     .ok_or("the Android Keystore no longer has hushphone's key")?;
+    if old && let Err(e) = wrap_state_key(file, &key) {
+        // The old file still opens; it is written again at the next start.
+        log("hushphone", &format!("couldn't write state.key in the current format: {e}"));
+    }
     Ok(Some(pigeonhole_protocols::secret::Secret::new(&key)))
+}
+
+/// Whether the Keystore enforces in hardware that a key it deleted stays deleted, even if the
+/// phone's storage is rolled back: ROLLBACK_RESISTANCE among the hardware-enforced tags of its
+/// attestation. An AES key has no attestation, so an EC key is made the way the state's key is,
+/// in StrongBox where there is one, attested, and deleted. No attestation is a no.
+// shortcut: the probe stands in for the state's key, made the same way; attest that key itself
+// if it ever becomes a key pair.
+pub fn hardware_key_deletion() -> bool {
+    let extension = with_activity(|env, _| {
+        let ks = keystore(env)?;
+        let mut found = None;
+        for strongbox in [true, false] {
+            match probe(env, &ks, strongbox) {
+                Ok(e) => {
+                    found = e;
+                    break;
+                }
+                Err(_) if env.exception_check()? => env.exception_clear()?,
+                Err(e) => return Err(e),
+            }
+        }
+        let alias = env.new_string(PROBE)?;
+        env.call_method(&ks, "deleteEntry", "(Ljava/lang/String;)V", &[JValue::Object(&alias)])?;
+        Ok(found)
+    });
+    let yes = matches!(&extension, Ok(Some(e)) if crate::keys::rollback_resistant(e));
+    log("hushphone", &format!("key attestation: {}", match &extension {
+        Ok(Some(_)) if yes => "rollback resistance enforced in hardware".to_string(),
+        Ok(Some(_)) => "no rollback resistance in the hardware-enforced list".to_string(),
+        Ok(None) => "no attestation".to_string(),
+        Err(e) => format!("failed: {e}"),
+    }));
+    yes
+}
+
+/// Make the probe key, in StrongBox if `strongbox`, and return the attestation extension of its
+/// certificate, if it has one.
+fn probe(env: &mut jni::JNIEnv, ks: &JObject, strongbox: bool) -> jni::errors::Result<Option<Vec<u8>>> {
+    let alias = env.new_string(PROBE)?;
+    // PURPOSE_SIGN
+    let b = env.new_object(BUILDER, "(Ljava/lang/String;I)V", &[JValue::Object(&alias), JValue::Int(4)])?;
+    let sha = env.new_string("SHA-256")?;
+    let digests = env.new_object_array(1, "java/lang/String", &sha)?;
+    env.call_method(&b, "setDigests", format!("([Ljava/lang/String;){RETURNS}"), &[JValue::Object(&digests)])?;
+    let challenge = env.byte_array_from_slice(b"hushphone")?;
+    env.call_method(&b, "setAttestationChallenge", format!("([B){RETURNS}"), &[JValue::Object(&challenge)])?;
+    if strongbox {
+        env.call_method(&b, "setIsStrongBoxBacked", format!("(Z){RETURNS}"), &[JValue::Bool(1)])?;
+    }
+    let spec = env.call_method(&b, "build", "()Landroid/security/keystore/KeyGenParameterSpec;", &[])?.l()?;
+    let (ec, provider) = (env.new_string("EC")?, env.new_string("AndroidKeyStore")?);
+    let kpg = env
+        .call_static_method(
+            "java/security/KeyPairGenerator",
+            "getInstance",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/security/KeyPairGenerator;",
+            &[JValue::Object(&ec), JValue::Object(&provider)],
+        )?
+        .l()?;
+    env.call_method(&kpg, "initialize", "(Ljava/security/spec/AlgorithmParameterSpec;)V", &[JValue::Object(&spec)])?;
+    env.call_method(&kpg, "generateKeyPair", "()Ljava/security/KeyPair;", &[])?;
+    let chain = env.call_method(ks, "getCertificateChain", "(Ljava/lang/String;)[Ljava/security/cert/Certificate;", &[JValue::Object(&alias)])?.l()?;
+    if chain.is_null() {
+        return Ok(None);
+    }
+    let chain: jni::objects::JObjectArray = chain.into();
+    if env.get_array_length(&chain)? == 0 {
+        return Ok(None);
+    }
+    let leaf = env.get_object_array_element(&chain, 0)?;
+    let oid = env.new_string("1.3.6.1.4.1.11129.2.1.17")?;
+    let ext = env.call_method(&leaf, "getExtensionValue", "(Ljava/lang/String;)[B", &[JValue::Object(&oid)])?.l()?;
+    if ext.is_null() {
+        return Ok(None);
+    }
+    Ok(Some(env.convert_byte_array(jni::objects::JByteArray::from(ext))?))
 }
