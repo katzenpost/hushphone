@@ -1482,7 +1482,7 @@ export enum Overlay { none, first-run, wipe, wiping, wiped, new-group, join, inv
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
-    icon: @image-url("icons/hush.svg");
+    icon: @image-url("../packaging/network.katzenpost.hushphone.svg");
     preferred-width: 1100px;
     preferred-height: 720px;
     min-width: 320px;
