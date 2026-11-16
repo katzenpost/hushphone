@@ -132,6 +132,7 @@ component Sidebar inherits Rectangle {
     callback join-group();
     callback pending();
     callback settings();
+    callback wipe();
     background: Theme.sidebar;
 
     VerticalLayout {
@@ -245,6 +246,12 @@ component Sidebar inherits Rectangle {
                     text: "Pending vouchers";
                     icon: @image-url("icons/clock.svg");
                     activated => { root.pending(); menu.close(); }
+                }
+                MenuEntry {
+                    text: "Emergency wipe";
+                    icon: @image-url("icons/alert.svg");
+                    danger: true;
+                    activated => { root.wipe(); menu.close(); }
                 }
             }
         }
@@ -1249,6 +1256,148 @@ component PictureDialog inherits Dialog {
     init => { send.focus(); }
 }
 
+// Hold for `hold` to act: a ring fills while it is held, and letting go before it is full
+// cancels. At least 20 mm high, so a gloved thumb finds it. Space or Enter, held while it has
+// keyboard focus, works the same; there is no one-tap action, for a screen reader or otherwise.
+component HoldButton {
+    in property <string> text;
+    in property <string> label;
+    in property <duration> hold: 2s;
+    callback held();
+    // 20 mm and more: on Android a logical pixel is a dp, 1/160 inch, so 126px is 20 mm; Slint's
+    // own mm assumes 96 dpi, which would make it 12 mm there.
+    height: 130px;
+    accessible-role: button;
+    accessible-label: root.label;
+    forward-focus: fs;
+    private property <bool> holding;
+    private property <duration> since;
+    private property <duration> tick-at-press;
+    private property <float> progress: root.holding ? min(1, (animation-tick() - root.tick-at-press) / root.hold) : 0;
+
+    stable := Stable { at: root.absolute-position; }
+
+    function press() {
+        if (!root.holding && stable.ready()) {
+            root.holding = true;
+            root.since = Clock.now();
+            root.tick-at-press = animation-tick();
+        }
+    }
+
+    Rectangle {
+        border-radius: Theme.radius;
+        background: root.holding ? Theme.danger.darker(0.2) : touch.has-hover ? Theme.danger.brighter(0.1) : Theme.danger;
+    }
+    HorizontalLayout {
+        padding: Theme.s4;
+        spacing: Theme.s4;
+        alignment: center;
+        Rectangle {
+            width: root.height - 2 * Theme.s4;
+            height: self.width;
+            y: (parent.height - self.height) / 2;
+            Rectangle {
+                border-radius: self.width / 2;
+                border-width: 4px;
+                border-color: #ffffff40;
+            }
+            Path {
+                width: 100%;
+                height: 100%;
+                viewbox-width: 100;
+                viewbox-height: 100;
+                stroke: #ffffff;
+                stroke-width: 4px;
+                // An arc from the top, clockwise, as far as the hold has come.
+                private property <float> p: min(root.progress, 0.9999);
+                commands: root.progress <= 0 ? "" : "M 50 4 A 46 46 0 " + (self.p > 0.5 ? "1" : "0") + " 1 " + (50 + 46 * sin(self.p * 360deg)) + " " + (50 - 46 * cos(self.p * 360deg));
+            }
+        }
+        Text {
+            text: root.text;
+            color: #ffffff;
+            font-size: Theme.fs-title;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(e) => {
+            if (e.button != PointerEventButton.left) { return; }
+            if (e.kind == PointerEventKind.down) {
+                root.press();
+            } else if (e.kind == PointerEventKind.up || e.kind == PointerEventKind.cancel) {
+                root.holding = false;
+            }
+        }
+    }
+    Timer {
+        interval: 50ms;
+        running: root.holding;
+        triggered => {
+            if (Clock.now() - root.since >= root.hold) {
+                root.holding = false;
+                root.held();
+            }
+        }
+    }
+    // Zero-sized, so that it takes keys but never the pointer from the touch area.
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        key-pressed(e) => {
+            if ((e.text == " " || e.text == Key.Return) && !e.repeat) {
+                root.press();
+                return accept;
+            }
+            reject
+        }
+        key-released(e) => {
+            if (e.text == " " || e.text == Key.Return) {
+                root.holding = false;
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+component WipeDialog inherits Dialog {
+    title: "Emergency wipe";
+    panel-width: 520px;
+    Hint { text: "Holding the button for 2 seconds destroys the key that seals your groups, then the groups, messages, contacts, settings and attachments, and closes hushphone. Nothing can bring them back. Let go before the ring is full to stop."; }
+    HoldButton {
+        text: "Hold to wipe";
+        label: "Emergency wipe: hold for 2 seconds to destroy everything";
+        held => { Actions.wipe(); }
+    }
+    HorizontalLayout {
+        alignment: end;
+        Button { text: "Cancel"; activated => { root.dismissed(); } }
+    }
+}
+
+component WipedDialog inherits Dialog {
+    title: "hushphone was wiped";
+    closable: false;
+    panel-width: 560px;
+    Text {
+        text: AppState.wipe-report;
+        color: Theme.text;
+        font-size: Theme.fs-small;
+        wrap: word-wrap;
+    }
+    HorizontalLayout {
+        alignment: end;
+        Button { text: "Start again"; primary: true; activated => { Actions.wipe-seen(); } }
+    }
+}
+
 component SettingsDialog inherits Dialog {
     in-out property <string> daemon: AppState.daemon;
     in-out property <bool> use-mesh: AppState.use-mesh;
@@ -1329,7 +1478,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, poll, confirm-leave, confirm-clear, confirm-remove, confirm-join }
+export enum Overlay { none, first-run, wipe, wiping, wiped, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, poll, confirm-leave, confirm-clear, confirm-remove, confirm-join }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1389,6 +1538,7 @@ export component AppWindow inherits Window {
                 join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
                 pending => { root.overlay = Overlay.pending; }
                 settings => { root.overlay = Overlay.settings; }
+                wipe => { root.overlay = Overlay.wipe; }
             }
             Rectangle {
                 x: 320px;
@@ -1585,6 +1735,10 @@ export component AppWindow inherits Window {
                     root.overlay = Overlay.confirm-leave;
                 }
             }
+            if root.overlay == Overlay.wipe: WipeDialog {
+                dismissed => { root.overlay = Overlay.none; }
+            }
+            if root.overlay == Overlay.wiped: WipedDialog { }
             if root.overlay == Overlay.settings: SettingsDialog {
                 title: "Settings";
                 dismissed => { root.overlay = Overlay.none; }
@@ -1633,6 +1787,11 @@ export component AppWindow inherits Window {
             }
         }
 
+        // The wipe under way: nothing of the app shows, and nothing takes input.
+        if root.overlay == Overlay.wiping: Rectangle {
+            background: #000000;
+            TouchArea { }
+        }
         if root.blanked: Rectangle {
             background: Theme.bg;
             TouchArea { }

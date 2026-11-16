@@ -15,6 +15,8 @@ pub trait Keeper {
     /// The key kept for the state in `dir`, if there is one.
     fn get(&self, dir: &Path) -> impl Future<Output = Result<Option<Secret>, String>> + Send;
     fn put(&self, dir: &Path, key: &Secret) -> impl Future<Output = Result<(), String>> + Send;
+    /// Destroy the key kept for the state in `dir`; nothing to do if there is none.
+    fn forget(&self, dir: &Path) -> impl Future<Output = Result<(), String>> + Send;
 }
 
 /// The key for the state in `dir`, made and kept on first use; or why there is none, for the
@@ -256,6 +258,10 @@ impl Keeper for System {
             .await
             .map_err(|e| e.to_string())
     }
+
+    async fn forget(&self, dir: &Path) -> Result<(), String> {
+        Self::keyring().await?.delete(&Self::attributes(dir)).await.map_err(|e| e.to_string())
+    }
 }
 
 /// A key the Android Keystore will not let out wraps ours, kept in `state.key` beside the state.
@@ -271,10 +277,15 @@ impl Keeper for System {
     async fn put(&self, dir: &Path, key: &Secret) -> Result<(), String> {
         crate::android::wrap_state_key(&dir.with_extension("key"), key)
     }
+
+    /// The Keystore's key; `state.key`, which it wrapped, is the wipe's to write over.
+    async fn forget(&self, _: &Path) -> Result<(), String> {
+        crate::android::delete_state_key()
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::PathBuf;
@@ -283,11 +294,11 @@ mod tests {
     use pigeonhole_protocols::protocols::katzenqt1::engine::{Changes, Chat, Line, State, StepResult};
 
     #[derive(Default)]
-    struct Fake {
-        keys: Mutex<std::collections::HashMap<PathBuf, Vec<u8>>>,
-        broken: bool,
-        refuse_put: bool,
-        newer: bool,
+    pub(crate) struct Fake {
+        pub(crate) keys: Mutex<std::collections::HashMap<PathBuf, Vec<u8>>>,
+        pub(crate) broken: bool,
+        pub(crate) refuse_put: bool,
+        pub(crate) newer: bool,
     }
 
     impl Keeper for Fake {
@@ -308,9 +319,17 @@ mod tests {
             self.keys.lock().unwrap().insert(dir.into(), key.to_vec());
             Ok(())
         }
+
+        async fn forget(&self, dir: &Path) -> Result<(), String> {
+            if self.broken {
+                return Err("no keyring".into());
+            }
+            self.keys.lock().unwrap().remove(dir);
+            Ok(())
+        }
     }
 
-    fn block<T>(f: impl Future<Output = T>) -> T {
+    pub(crate) fn block<T>(f: impl Future<Output = T>) -> T {
         tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(f)
     }
 

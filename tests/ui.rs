@@ -593,3 +593,52 @@ fn a_pasted_message_taller_than_the_composer_scrolls() {
     assert_eq!(field().size().height, one, "a send brings it back to one line");
     assert!(thumbs().is_empty());
 }
+
+/// Emergency wipe: holding the button 2 s wipes, letting go sooner does not, and it is in reach
+/// of a gloved thumb.
+#[test]
+fn a_two_second_hold_wipes_and_an_early_release_does_not() {
+    use slint::platform::WindowEvent;
+    let ui = window();
+    let wiped = Rc::new(Cell::new(0));
+    let w = wiped.clone();
+    ui.global::<Actions>().on_wipe(move || w.set(w.get() + 1));
+    ui.set_overlay(Overlay::Wipe);
+    let hold = button(&ui, "Emergency wipe: hold for 2 seconds to destroy everything");
+    // 20 mm on Android, where a logical pixel is a dp, 1/160 inch: 126px.
+    assert!(hold.size().height >= 126.0, "{:?}", hold.size());
+    let (p, size) = (hold.absolute_position(), hold.size());
+    let at = slint::LogicalPosition::new(p.x + size.width / 2.0, p.y + size.height / 2.0);
+    let press = || ui.window().dispatch_event(WindowEvent::PointerPressed { position: at, button: PointerEventButton::Left });
+    let release = || ui.window().dispatch_event(WindowEvent::PointerReleased { position: at, button: PointerEventButton::Left });
+    mock_elapsed_time(Duration::from_millis(600));
+
+    press();
+    mock_elapsed_time(Duration::from_millis(1900));
+    release();
+    mock_elapsed_time(Duration::from_millis(500));
+    assert_eq!(wiped.get(), 0, "let go at 1.9 s: nothing happens");
+
+    press();
+    mock_elapsed_time(Duration::from_millis(1000));
+    mock_elapsed_time(Duration::from_millis(1100));
+    assert_eq!(wiped.get(), 1, "held 2 s: wiped");
+    release();
+    mock_elapsed_time(Duration::from_millis(3000));
+    assert_eq!(wiped.get(), 1, "once");
+}
+
+/// After a wipe the report is shown, and it cannot be dismissed but by reading on.
+#[test]
+fn the_wipe_report_leads_to_the_first_start() {
+    let ui = window();
+    let seen = Rc::new(Cell::new(0));
+    let s = seen.clone();
+    ui.global::<Actions>().on_wipe_seen(move || s.set(s.get() + 1));
+    ui.global::<AppState>().set_wipe_report("• The key: deleted.".into());
+    ui.set_overlay(Overlay::Wiped);
+    let go = button(&ui, "Start again");
+    mock_elapsed_time(Duration::from_millis(600));
+    go.mock_single_click(PointerEventButton::Left);
+    assert_eq!(seen.get(), 1);
+}

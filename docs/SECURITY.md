@@ -75,6 +75,16 @@ whatever other members send is untrusted.
   with the state, sealed too. A file you save is written
   out plain in `~/hushphone/received`, since that is what saving is for. Logs hold no message
   text.
+- **Emergency wipe.** The + menu's Emergency wipe opens a full-width button: held for 2 s, it
+  wipes; let go sooner, it does not. The wipe is a crypto-erase, in this order: the screen goes
+  blank, Screen security comes on and the clipboard is emptied; the key that seals the state is
+  deleted from the Android Keystore (or the keyring); `state.key` is written over and deleted;
+  the state, the settings, the attachments and the cache are deleted; what the app holds in
+  memory is dropped, guarded memory wiped as it is freed, and the process ends. A marker with
+  nothing secret in it is left, so the next start says what was destroyed and how, then starts
+  afresh. Whether the Keystore's deletion is enforced in hardware is what Settings shows. The wipe
+  does not cover kpclientd or kpclientd-android, hushphone's own presence on the device, or files
+  saved out of it.
 - **Sandboxed.** On the mixnet, kpclientd does all the networking, so hushphone needs very little
   of the system.
   - **seccomp.** Once hushphone knows how it reaches Pigeonhole, it puts a seccomp filter on every

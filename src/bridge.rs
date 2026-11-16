@@ -168,7 +168,7 @@ pub fn start(ui: &AppWindow, mut setup: Setup) {
     #[cfg(target_os = "android")]
     {
         // Before the first frame, so no screenshot sees one the user wanted hidden.
-        crate::android::set_screen_security(settings.screen_security);
+        crate::android::init_screen_security(settings.screen_security);
         setup.source = crate::android::source(&settings, &setup.default_daemon);
     }
     if settings.daemon.is_empty() || setup.old_defaults.contains(&settings.daemon) {
@@ -243,7 +243,12 @@ pub fn start(ui: &AppWindow, mut setup: Setup) {
         }
         #[cfg(target_os = "android")]
         app.check_key_deletion();
-        if app.settings.name.is_empty() && app.locked.is_none() {
+        if let Some(w) = crate::wipe::marker(&app.setup.data_dir) {
+            app.state(|s| s.set_wipe_report(crate::wipe::report(&w).into()));
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(Overlay::Wiped);
+            }
+        } else if app.settings.name.is_empty() && app.locked.is_none() {
             if let Some(ui) = app.ui.upgrade() {
                 ui.set_overlay(Overlay::FirstRun);
             }
@@ -400,6 +405,49 @@ fn wire(ui: &AppWindow) {
     });
     a.on_dismiss_notice(|| {
         with_app(|app| app.notice("", false));
+    });
+    a.on_wipe(|| {
+        let Some((data, cache, hardware)) = with_app(|app| {
+            // Nothing shows, and nothing can be done any more.
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(Overlay::Wiping);
+            }
+            app.cmd = None;
+            (app.setup.data_dir.clone(), app.setup.cache_dir.clone(), app.settings.hardware_key_deletion == Some(true))
+        }) else {
+            return;
+        };
+        // On a thread of its own: on Android the platform calls below can wait on the event
+        // loop, which is busy running this callback.
+        let _ = std::thread::Builder::new().name("wipe".into()).spawn(move || {
+            #[cfg(target_os = "android")]
+            crate::android::set_screen_security(true);
+            let _ = effects::clear_clipboard(&UserIntent::new());
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build();
+            if let Ok(rt) = rt {
+                rt.block_on(crate::wipe::wipe(&crate::keys::System, &data, &cache, hardware));
+            }
+            // What the UI thread holds goes, the state's key with it: Secrets wipe their memory
+            // as they are freed. The rest goes with the process.
+            let _ = slint::invoke_from_event_loop(|| {
+                drop(APP.with(|a| a.borrow_mut().take()));
+                std::process::exit(0);
+            });
+            std::thread::sleep(Duration::from_secs(2));
+            std::process::exit(0);
+        });
+    });
+    a.on_wipe_seen(|| {
+        with_app(|app| {
+            crate::wipe::forget_marker(&app.setup.data_dir);
+            app.state(|s| s.set_wipe_report("".into()));
+            if let Some(ui) = app.ui.upgrade() {
+                ui.set_overlay(if app.settings.name.is_empty() && app.locked.is_none() { Overlay::FirstRun } else { Overlay::None });
+            }
+            if !app.settings.name.is_empty() {
+                app.connect();
+            }
+        });
     });
     a.on_expand(|id| {
         with_app(|app| {

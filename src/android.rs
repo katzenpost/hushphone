@@ -27,13 +27,33 @@ static APP: OnceLock<AndroidApp> = OnceLock::new();
 static SECURE: AtomicBool = AtomicBool::new(false);
 
 /// Keep every window out of screenshots, screen recording and the recent-apps thumbnails, or
-/// let them in. The platform applies it on the UI thread, so it may be called from any.
+/// let them in, at start: before the event loop runs, so before the first frame.
+pub fn init_screen_security(on: bool) {
+    SECURE.store(on, Ordering::Relaxed);
+    if let Some(app) = APP.get() {
+        let (s, none) = (WindowManagerFlags::SECURE, WindowManagerFlags::empty());
+        if on { app.set_window_flags(s, none) } else { app.set_window_flags(none, s) }
+    }
+}
+
+/// The same, once the event loop runs, from any thread. AndroidApp::set_window_flags takes a
+/// write lock that the event loop holds as a read lock while it polls: called from the loop it
+/// never returns, and waiting on another thread it stalls the loop's next read. So the flag is
+/// set through the activity's Window, on Java's main thread, which needs only a read lock.
 pub fn set_screen_security(on: bool) {
     SECURE.store(on, Ordering::Relaxed);
     if let Some(app) = APP.get() {
-        let s = WindowManagerFlags::SECURE;
-        let none = WindowManagerFlags::empty();
-        if on { app.set_window_flags(s, none) } else { app.set_window_flags(none, s) }
+        app.run_on_java_main_thread(Box::new(move || {
+            let set = with_activity(|env, activity| {
+                let window = env.call_method(activity, "getWindow", "()Landroid/view/Window;", &[])?.l()?;
+                // WindowManager.LayoutParams.FLAG_SECURE
+                env.call_method(&window, if on { "addFlags" } else { "clearFlags" }, "(I)V", &[JValue::Int(0x2000)])?;
+                Ok(())
+            });
+            if let Err(e) = set {
+                log("hushphone", &format!("couldn't set Screen security: {e}"));
+            }
+        }));
     }
 }
 
@@ -150,6 +170,15 @@ pub fn copy_text(text: &str, sensitive: bool) -> Result<(), String> {
             env.call_method(&desc, "setExtras", "(Landroid/os/PersistableBundle;)V", &[JValue::Object(&extras)])?;
         }
         env.call_method(&cm, "setPrimaryClip", "(Landroid/content/ClipData;)V", &[JValue::Object(&clip)])?;
+        Ok(())
+    })
+}
+
+/// Empty the clipboard, for the wipe.
+pub fn clear_clipboard() -> Result<(), String> {
+    with_activity(|env, activity| {
+        let cm = clipboard(env, activity)?;
+        env.call_method(&cm, "clearPrimaryClip", "()V", &[])?;
         Ok(())
     })
 }
@@ -619,6 +648,23 @@ fn generate_key<'a>(env: &mut jni::JNIEnv<'a>, strongbox: bool, unlocked: bool) 
         .l()?;
     env.call_method(&kg, "init", "(Ljava/security/spec/AlgorithmParameterSpec;)V", &[JValue::Object(&spec)])?;
     env.call_method(&kg, "generateKey", "()Ljavax/crypto/SecretKey;", &[])?.l()
+}
+
+/// Delete the Keystore's key that wraps the state's key, and the probe key if one was left; an
+/// error unless the Keystore then has neither.
+pub fn delete_state_key() -> Result<(), String> {
+    with_activity(|env, _| {
+        let ks = keystore(env)?;
+        let mut left = false;
+        for name in [STATE_KEY, PROBE] {
+            let alias = env.new_string(name)?;
+            env.call_method(&ks, "deleteEntry", "(Ljava/lang/String;)V", &[JValue::Object(&alias)])?;
+            left |= env.call_method(&ks, "containsAlias", "(Ljava/lang/String;)Z", &[JValue::Object(&alias)])?.z()?;
+        }
+        Ok(left)
+    })
+    .map_err(|e| format!("the Android Keystore would not delete the key: {e}"))
+    .and_then(|left| if left { Err("the Android Keystore still has the key".into()) } else { Ok(()) })
 }
 
 /// AES-GCM through the Keystore's key: `iv` given to decrypt, made by the Keystore to encrypt;
