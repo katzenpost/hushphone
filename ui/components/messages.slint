@@ -442,8 +442,11 @@ export component MessageRow {
                     padding-bottom: 6px;
                     spacing: Theme.s1;
 
-                    if root.line.kind == LineKind.text: Text {
+                    // Read-only TextInput rather than Text so the message can be selected and copied.
+                    if root.line.kind == LineKind.text: TextInput {
                         text: root.line.text;
+                        read-only: true;
+                        single-line: false;
                         color: root.ink;
                         font-size: Theme.fs-body;
                         wrap: word-wrap;
