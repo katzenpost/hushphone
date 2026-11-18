@@ -4764,7 +4764,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -4924,7 +4924,7 @@ checksum = "5be167a7af36ee22fe3115051bc51f6e6c7054c9348e28deb4f49bd6f705a315"
 [[package]]
 name = "pigeonhole_protocols"
 version = "0.1.0"
-source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=f39ba0ce6afe51132da2a6f340938aa03cb9df2b#f39ba0ce6afe51132da2a6f340938aa03cb9df2b"
+source = "git+https://github.com/katzenpost/pigeonhole_protocols?rev=6c87a34d5d40ae42e27faa8dcf5132b75f0f2d2b#6c87a34d5d40ae42e27faa8dcf5132b75f0f2d2b"
 dependencies = [
  "base64 0.22.1",
  "blake2",
@@ -4935,7 +4935,6 @@ dependencies = [
  "env_logger",
  "falcon-rs",
  "getrandom 0.4.3",
- "hashbrown 0.16.1",
  "hex",
  "hkdf",
  "hpqc",
@@ -7672,7 +7671,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
