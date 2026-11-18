@@ -1,3 +1,17 @@
+hushphone (0.3.5) unstable; urgency=medium
+
+  * Mesh and mixnet chats reach each other both ways: mesh writes now fit the mixnet box size.
+  * Received message text can be selected and copied.
+  * The EchoMix mark is the app icon.
+  * Emergency wipe: hold a button for 2 seconds to destroy the key and the state.
+  * Settings are sealed with the state. An upgrade migrates the old plain settings.toml
+    and shreds it, and with no keyring or Keystore the app now refuses to open instead of
+    keeping plaintext.
+  * A composer message taller than its box scrolls instead of being clipped.
+  * Docs: install a release before building from source.
+
+ -- Katzenpost <packages@katzenpost.network>  Wed, 18 Nov 2026 08:09:24 +0000
+
 hushphone (0.3.4) unstable; urgency=medium
 
   * The New poll entry in the group menu opens the poll dialog again.
