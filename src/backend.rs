@@ -188,6 +188,8 @@ pub enum Update {
     Removed(ChatId),
     /// A group made at the user's request; `ticket` is the request's.
     Made(ChatId, u64),
+    /// A member's removal failed, so they are shown again; a `Failed` follows with why.
+    Unremoved(ChatId, Vec<u8>),
     Failed(String),
     /// The client stopped and cannot go on.
     Stopped(String),
@@ -558,7 +560,12 @@ async fn carry_out(c: &Client, cmd: Cmd, s: &mut Serving<'_>, tell: &impl Fn(Upd
         Cmd::Ping(id) => c.ping(&id).await?,
         Cmd::Tally(id, t) => c.send_tally(&id, t).await?,
         Cmd::Scan(id) => c.scan(&id).await?,
-        Cmd::Remove(id, key) => c.remove(&id, key).await?,
+        Cmd::Remove(id, key) => {
+            if let Err(e) = c.remove(&id, key.clone()).await {
+                tell(Update::Unremoved(id, key));
+                return Err(e);
+            }
+        }
         Cmd::Leave(id) => c.leave(&id).await?,
         Cmd::Cancel(id) => c.cancel(&id).await?,
         Cmd::Clear(id) => {
