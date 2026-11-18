@@ -96,6 +96,8 @@ struct App {
     pings: Pings,
     /// Poll syncs sent whose lines are not back yet: group, message type, poll.
     syncing: HashSet<(ChatId, u64, Vec<u8>)>,
+    /// Members the user removed, hidden at once while the removal is carried out: group, key.
+    removing: HashSet<(ChatId, Vec<u8>)>,
     /// What the user picked last: a result for an older pick does not move the selection.
     ticket: u64,
     /// Which group a recording in progress is for.
@@ -220,6 +222,7 @@ pub fn start(ui: &AppWindow, mut setup: Setup) {
         radio: Radio::default(),
         pings: Pings::default(),
         syncing: HashSet::new(),
+        removing: HashSet::new(),
         ticket: 0,
         recording_for: None,
         scanning: None,
@@ -347,7 +350,9 @@ fn wire(ui: &AppWindow) {
     a.on_remove_member(|key| {
         with_app(|app| {
             if let (Some(id), Ok(key)) = (app.current.clone(), hex::decode(key.as_str())) {
+                app.removing.insert((id.clone(), key.clone()));
                 app.send(Cmd::Remove(id, key));
+                app.render_current();
             }
         });
     });
@@ -720,6 +725,10 @@ impl App {
                         ui.set_show_conversation(true);
                     }
                 }
+            }
+            Update::Unremoved(id, key) => {
+                self.removing.remove(&(id, key));
+                self.render_current();
             }
             Update::Failed(e) => self.notice(&e, true),
             Update::Stopped(e) => {
@@ -1110,7 +1119,10 @@ impl App {
             }
         }
         sync(&self.line_model, items);
-        sync(&self.member_model, model::member_items(v, &who));
+        self.removing.retain(|(id, key)| id != &v.id || v.members.iter().any(|m| &m.key == key));
+        let mut members = model::member_items(v, &who);
+        members.retain(|m| !hex::decode(m.key.as_str()).is_ok_and(|k| self.removing.contains(&(v.id.clone(), k))));
+        sync(&self.member_model, members);
     }
 
     fn toggle_voice(&mut self, line: usize) {
