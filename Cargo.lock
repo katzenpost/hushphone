@@ -2744,7 +2744,7 @@ checksum = "48ce8546b993eaf241d69ded33b1be6d205dd9857ec879d9d18bd05d3676e144"
 
 [[package]]
 name = "hushphone"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "arboard",
  "chrono",
