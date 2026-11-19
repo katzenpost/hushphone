@@ -1,7 +1,7 @@
 # Using hushphone
 
-- **Start a group** with New group. Only you see the name you give it.
-- **Join someone's group** with Join a group. hushphone mints a voucher, over the mixnet or the mesh, and
+- **Start a group** with Create or join a group, then Start a new group. Only you see the name you give it.
+- **Join someone's group** with Create or join a group, then Join someone's group. hushphone mints a voucher, over the mixnet or the mesh, and
   shows its code. Give the code to a member of the group over a channel you trust; when they add it with
   Add a member, you join. [vouchers.md](vouchers.md) walks through both sides with
   screenshots.
