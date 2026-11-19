@@ -1,0 +1,9 @@
+<p>Group chat with push-to-talk voice messages, over the Katzenpost mixnet or a Reticulum mesh. Mesh and mixnet members share groups through a bridge replica, and the groups are the same ones katzenqt, jam and the Linux build of hushphone use.</p>
+<p>There are no accounts and no phone numbers. A newcomer makes a voucher code and shows it as a QR code, or sends it by sound; a member of the group adds them with it.</p>
+<ul>
+<li>Text, voice clips, pictures and files</li>
+<li>A walkie-talkie radio view for a group</li>
+<li>Polls and pings</li>
+<li>An emergency wipe that destroys the key and the state</li>
+</ul>
+<p>On the mixnet, hushphone opens no IP socket: it reaches the mixnet only through <a href="https://github.com/katzenpost/kpclientd-android">kpclientd-android</a>, which you install too and which asks you to allow hushphone. On the mesh it opens one TCP connection, to a Pigeonhole replica, by default namenlos's bridge replica.</p>

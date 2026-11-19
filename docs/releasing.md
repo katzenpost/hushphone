@@ -1,6 +1,7 @@
 # Releasing
 
-1. Bump the version in `Cargo.toml` (and `Cargo.lock`, with `cargo check`), in the README line
+1. Bump the version in `Cargo.toml` (and `Cargo.lock`, with `cargo check`), its `version-code`
+   (the APK build says the number it wants), in the README line
    "This tree is version X.Y.Z", and add a `debian/changelog` entry `hushphone (X.Y.Z)`.
 2. Open a pull request "Release X.Y.Z" and merge it.
 3. On main: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`

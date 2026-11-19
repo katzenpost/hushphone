@@ -23,6 +23,8 @@ crate=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 # Above v0.1.3's 16777475, and one per ABI so arm64-v8a < x86_64.
 case $abi in arm64-v8a) n=1 ;; x86_64) n=2 ;; *) echo "no version code for $abi" >&2; exit 2 ;; esac
 code=$(echo "$crate" | awk -F. -v n="$n" '{ print 100000000 + ($1 * 10000 + $2 * 100 + $3) * 10 + n }')
+grep -qx "version-code = $((code / 10))" Cargo.toml ||
+    { echo "Cargo.toml needs version-code = $((code / 10)) for $crate" >&2; exit 2; }
 
 work=target/apk/$abi
 rm -rf "$work"
