@@ -46,6 +46,28 @@ On the mixnet instead, start `kpclientd` and run `cargo run --release`; see
 [docs/building.md](docs/building.md). To build the APK, see
 [docs/building.md](docs/building.md#android-apk).
 
+## Joining a group
+
+Creating a group makes no code. To join one, the newcomer makes the code and gives it to someone
+already in the group, not the other way round. Below, the newcomer is on Android and the member on
+the Linux desktop.
+
+1. The newcomer chooses **+**, **Create or join a group**, **Join someone's group**, and gets a
+   voucher code.
+2. The newcomer gives the code to the member, by QR code, by sound or over a channel they trust.
+3. The member presses **Add a member** and adds the code. The group appears on the newcomer's side.
+
+<p>
+  <img src="docs/vouchers/readme-code.jpg" alt="1. On Android, the newcomer's voucher code" width="210">
+  <img src="docs/vouchers/readme-add.jpg" alt="2. On the desktop, the member adds that code" width="300">
+  <img src="docs/vouchers/readme-joined.jpg" alt="3. On Android, the newcomer is in the group" width="210">
+</p>
+
+The direction follows from the cryptography. The group's keys are the secret, and a secret is sent
+by sealing it to a public key that its receiver made. Minting the voucher makes the newcomer that
+key pair and a mailbox; the code lets the member find both, seal the group's keys to the
+newcomer's key and leave them in the mailbox. [docs/vouchers.md](docs/vouchers.md) has more.
+
 ## Documentation
 
 - [Building and running](docs/building.md): the three transports, the Android APK, the Debian package, releases
