@@ -52,16 +52,34 @@ Creating a group makes no code. To join one, the newcomer makes the code and giv
 already in the group, not the other way round. Below, the newcomer is on Android and the member on
 the Linux desktop.
 
-1. The newcomer chooses **+**, **Create or join a group**, **Join someone's group**, and gets a
-   voucher code.
-2. The newcomer gives the code to the member, by QR code, by sound or over a channel they trust.
-3. The member presses **Add a member** and adds the code. The group appears on the newcomer's side.
+1. The member, if the group is new, chooses **+**, **Create or join a group**, **Start a new
+   group** and names it. No code appears: the group waits for one.
 
-<p>
-  <img src="docs/vouchers/readme-code.jpg" alt="1. On Android, the newcomer's voucher code" width="210">
-  <img src="docs/vouchers/readme-add.jpg" alt="2. On the desktop, the member adds that code" width="300">
-  <img src="docs/vouchers/readme-joined.jpg" alt="3. On Android, the newcomer is in the group" width="210">
-</p>
+   <img src="docs/vouchers/readme-m1.jpg" alt="Desktop: the + menu" width="200">
+   <img src="docs/vouchers/readme-m2.jpg" alt="Desktop: Start a group or join one" width="250">
+   <img src="docs/vouchers/readme-m3.jpg" alt="Desktop: New group, named Garden" width="250">
+   <img src="docs/vouchers/readme-m4.jpg" alt="Desktop: the new group, waiting for a member's code" width="460">
+
+2. The newcomer chooses **+**, **Create or join a group**, **Join someone's group**, names the
+   group and presses **Get a voucher**. hushphone mints a voucher and shows its code.
+
+   <img src="docs/vouchers/readme-n1.jpg" alt="Android: the + menu" width="180">
+   <img src="docs/vouchers/readme-n2.jpg" alt="Android: Start a group or join one" width="180">
+   <img src="docs/vouchers/readme-n3.jpg" alt="Android: Join a group, named Garden" width="180">
+   <img src="docs/vouchers/readme-n4.jpg" alt="Android: the voucher code, as a QR code and text" width="180">
+
+3. The newcomer gives the code to the member: shown as a QR code, sent by sound, or over a channel
+   they trust.
+4. The member opens the group, presses the add-member icon, scans or pastes the code and presses
+   **Add member**. The header says *adding a member…* until the group's keys are on their way.
+
+   <img src="docs/vouchers/readme-m5.jpg" alt="Desktop: Add a member, with the newcomer's code scanned" width="250">
+   <img src="docs/vouchers/readme-m6.jpg" alt="Desktop: adding a member" width="460">
+   <img src="docs/vouchers/readme-m7.jpg" alt="Desktop: added a member" width="460">
+
+5. The group appears on the newcomer's side.
+
+   <img src="docs/vouchers/readme-n5.jpg" alt="Android: joined the group" width="250">
 
 The direction follows from the cryptography. The group's keys are the secret, and a secret is sent
 by sealing it to a public key that its receiver made. Minting the voucher makes the newcomer that
