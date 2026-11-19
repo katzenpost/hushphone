@@ -128,8 +128,7 @@ component MenuEntry {
 
 component Sidebar inherits Rectangle {
     callback open-chat(string);
-    callback new-group();
-    callback join-group();
+    callback start-group();
     callback pending();
     callback settings();
     callback wipe();
@@ -233,14 +232,9 @@ component Sidebar inherits Rectangle {
             VerticalLayout {
                 padding: Theme.s1;
                 MenuEntry {
-                    text: "New group";
+                    text: "Start or join a group";
                     icon: @image-url("icons/plus.svg");
-                    activated => { root.new-group(); menu.close(); }
-                }
-                MenuEntry {
-                    text: "Join a group";
-                    icon: @image-url("icons/join.svg");
-                    activated => { root.join-group(); menu.close(); }
+                    activated => { root.start-group(); menu.close(); }
                 }
                 MenuEntry {
                     text: "Pending vouchers";
@@ -930,8 +924,7 @@ component Conversation inherits Rectangle {
 }
 
 component Welcome inherits Rectangle {
-    callback new-group();
-    callback join-group();
+    callback start-group();
     background: Theme.bg;
     VerticalLayout {
         alignment: center;
@@ -960,17 +953,11 @@ component Welcome inherits Rectangle {
             alignment: center;
             spacing: Theme.s3;
             Button {
-                text: "New group";
+                text: "Start or join a group";
                 icon: @image-url("icons/plus.svg");
                 has-icon: true;
                 primary: true;
-                activated => { root.new-group(); }
-            }
-            Button {
-                text: "Join a group";
-                icon: @image-url("icons/join.svg");
-                has-icon: true;
-                activated => { root.join-group(); }
+                activated => { root.start-group(); }
             }
         }
     }
@@ -1071,6 +1058,22 @@ component PollDialog inherits Dialog {
         }
     }
     init => { field.focus(); }
+}
+
+// One way in for both sides: each choice continues into its own existing dialog.
+component StartDialog inherits Dialog {
+    callback new-group();
+    callback join-group();
+    VerticalLayout {
+        spacing: Theme.s2;
+        Button { text: "Start a new group"; primary: true; activated => { root.new-group(); } }
+        Hint { text: "You name it, then add people with their codes."; }
+    }
+    VerticalLayout {
+        spacing: Theme.s2;
+        Button { text: "Join someone's group"; activated => { root.join-group(); } }
+        Hint { text: "You get a code to give to someone already in it."; }
+    }
 }
 
 component ConfirmDialog inherits Dialog {
@@ -1478,7 +1481,7 @@ component SettingsDialog inherits Dialog {
     }
 }
 
-export enum Overlay { none, first-run, wipe, wiping, wiped, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, poll, confirm-leave, confirm-clear, confirm-remove, confirm-join }
+export enum Overlay { none, first-run, wipe, wiping, wiped, start, new-group, join, invite, members, pending, settings, rename, petname, attach, picture, poll, confirm-leave, confirm-clear, confirm-remove, confirm-join }
 
 export component AppWindow inherits Window {
     title: AppState.current-name == "" ? "hushphone" : AppState.current-name + " — hushphone";
@@ -1534,8 +1537,7 @@ export component AppWindow inherits Window {
                     Actions.select-chat(id);
                     root.show-conversation = true;
                 }
-                new-group => { root.overlay = Overlay.new-group; }
-                join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
+                start-group => { root.overlay = Overlay.start; }
                 pending => { root.overlay = Overlay.pending; }
                 settings => { root.overlay = Overlay.settings; }
                 wipe => { root.overlay = Overlay.wipe; }
@@ -1569,8 +1571,7 @@ export component AppWindow inherits Window {
                 width: area.width - 321px;
                 height: area.height;
                 visible: !root.narrow;
-                new-group => { root.overlay = Overlay.new-group; }
-                join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
+                start-group => { root.overlay = Overlay.start; }
             }
 
             // Notices from the host never take focus or open a dialog: a strip under the header.
@@ -1624,6 +1625,12 @@ export component AppWindow inherits Window {
                     Actions.choose-name(v);
                     root.overlay = Overlay.none;
                 }
+            }
+            if root.overlay == Overlay.start: StartDialog {
+                title: "Start a group or join one";
+                dismissed => { root.overlay = Overlay.none; }
+                new-group => { root.overlay = Overlay.new-group; }
+                join-group => { root.overlay = AppState.pending.length > 0 ? Overlay.confirm-join : Overlay.join; }
             }
             if root.overlay == Overlay.new-group: NameDialog {
                 title: "New group";

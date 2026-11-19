@@ -34,7 +34,7 @@ fn button(ui: &AppWindow, label: &str) -> ElementHandle {
 #[test]
 fn controls_settle_before_they_act() {
     let ui = window();
-    let new_group = button(&ui, "New group");
+    let new_group = button(&ui, "Start or join a group");
     // A click the moment the button appears goes nowhere: it may have been meant for whatever
     // was under the pointer a moment before.
     new_group.mock_single_click(PointerEventButton::Left);
@@ -42,15 +42,26 @@ fn controls_settle_before_they_act() {
     assert_eq!(ui.get_overlay(), Overlay::None);
     mock_elapsed_time(Duration::from_millis(600));
     new_group.mock_single_click(PointerEventButton::Left);
-    assert_eq!(ui.get_overlay(), Overlay::NewGroup);
+    assert_eq!(ui.get_overlay(), Overlay::Start);
 
     // The dialog's buttons settle too, from when the dialog opened.
-    let cancel = button(&ui, "Cancel");
-    cancel.mock_single_click(PointerEventButton::Left);
-    assert_eq!(ui.get_overlay(), Overlay::NewGroup);
+    let close = button(&ui, "Close");
+    close.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::Start);
     mock_elapsed_time(Duration::from_millis(600));
-    cancel.mock_single_click(PointerEventButton::Left);
+    close.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::None);
+}
+
+/// One way in: the start dialog leads to the existing name entry for a new group.
+#[test]
+fn start_dialog_leads_to_a_new_group() {
+    let ui = window();
+    ui.set_overlay(Overlay::Start);
+    let start = button(&ui, "Start a new group");
+    mock_elapsed_time(Duration::from_millis(600));
+    start.mock_single_click(PointerEventButton::Left);
+    assert_eq!(ui.get_overlay(), Overlay::NewGroup);
 }
 
 #[test]
@@ -136,16 +147,16 @@ fn every_button_has_a_label() {
 #[test]
 fn a_control_that_moves_must_settle_again() {
     let ui = window();
-    let new_group = button(&ui, "New group");
+    let new_group = button(&ui, "Start or join a group");
     mock_elapsed_time(Duration::from_millis(600));
     // The window changes size, and the button moves under a pointer that was aimed elsewhere.
     ui.window().set_size(LogicalSize::new(900.0, 720.0));
-    let moved = button(&ui, "New group");
+    let moved = button(&ui, "Start or join a group");
     moved.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::None, "a click on a control that just moved is ignored");
     mock_elapsed_time(Duration::from_millis(600));
     new_group.mock_single_click(PointerEventButton::Left);
-    assert_eq!(ui.get_overlay(), Overlay::NewGroup);
+    assert_eq!(ui.get_overlay(), Overlay::Start);
 }
 
 #[test]
@@ -369,13 +380,15 @@ fn radio_mode_trades_the_chat_for_a_radio_and_back() {
 #[test]
 fn a_second_voucher_is_confirmed_first() {
     let ui = window();
-    let join = button(&ui, "Join a group");
+    ui.set_overlay(Overlay::Start);
+    let join = button(&ui, "Join someone's group");
     mock_elapsed_time(Duration::from_millis(600));
     join.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::Join, "no voucher pending: straight to the dialog");
-    ui.set_overlay(Overlay::None);
+    ui.set_overlay(Overlay::Start);
     let pending = ChatItem { id: "g".into(), joining: true, ..Default::default() };
     ui.global::<AppState>().set_pending(ModelRc::new(VecModel::from(vec![pending])));
+    let join = button(&ui, "Join someone's group");
     mock_elapsed_time(Duration::from_millis(600));
     join.mock_single_click(PointerEventButton::Left);
     assert_eq!(ui.get_overlay(), Overlay::ConfirmJoin);
