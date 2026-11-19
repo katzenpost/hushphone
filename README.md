@@ -63,10 +63,10 @@ the Linux desktop.
 2. The newcomer chooses **+**, **Create or join a group**, **Join someone's group**, names the
    group and presses **Get a voucher**. hushphone mints a voucher and shows its code.
 
-   <img src="docs/vouchers/readme-n1.jpg" alt="Android: the + menu" width="180">
-   <img src="docs/vouchers/readme-n2.jpg" alt="Android: Start a group or join one" width="180">
-   <img src="docs/vouchers/readme-n3.jpg" alt="Android: Join a group, named Garden" width="180">
-   <img src="docs/vouchers/readme-n4.jpg" alt="Android: the voucher code, as a QR code and text" width="180">
+   <img src="docs/vouchers/readme-n1.jpg" alt="Android: the + menu" width="300">
+   <img src="docs/vouchers/readme-n2.jpg" alt="Android: Start a group or join one" width="300">
+   <img src="docs/vouchers/readme-n3.jpg" alt="Android: Join a group, named Garden" width="300">
+   <img src="docs/vouchers/readme-n4.jpg" alt="Android: the voucher code, as a QR code and text" width="240">
 
 3. The newcomer gives the code to the member: shown as a QR code, sent by sound, or over a channel
    they trust.
@@ -79,7 +79,7 @@ the Linux desktop.
 
 5. The group appears on the newcomer's side.
 
-   <img src="docs/vouchers/readme-n5.jpg" alt="Android: joined the group" width="250">
+   <img src="docs/vouchers/readme-n5.jpg" alt="Android: joined the group" width="300">
 
 The direction follows from the cryptography. The group's keys are the secret, and a secret is sent
 by sealing it to a public key that its receiver made. Minting the voucher makes the newcomer that
