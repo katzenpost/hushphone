@@ -77,6 +77,10 @@ tempfile = "3"
 proptest = "1"
 
 # The Android manifest is packaging/android/AndroidManifest.xml; scripts/build-apk.sh makes the APK.
+[package.metadata.android]
+# The APKs' version code less its ABI digit, which scripts/build-apk.sh checks against the
+# version above; F-Droid's update check reads it here.
+version-code = 10000306
 
 # One codegen unit: with several, LLVM names symbols after the build directory, and the
 # release would not be reproducible.
