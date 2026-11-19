@@ -1,3 +1,11 @@
+hushphone (0.3.6) unstable; urgency=medium
+
+  * A removed member disappears from the Members dialog at once.
+  * One "Create or join a group" choice, with a hint on each empty screen.
+  * Docs: joining a group, step by step with screenshots.
+
+ -- Katzenpost <packages@katzenpost.network>  Thu, 19 Nov 2026 16:46:54 +0000
+
 hushphone (0.3.5) unstable; urgency=medium
 
   * Mesh and mixnet chats reach each other both ways: mesh writes now fit the mixnet box size.
