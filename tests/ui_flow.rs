@@ -78,7 +78,7 @@ fn make_a_group_and_talk() {
         until("the link", || st.get_connection() == Connection::Online).await;
         assert_eq!(st.get_my_name(), "alice");
 
-        settled(&ui, "Start or join a group", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
+        settled(&ui, "Create or join a group", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         settled(&ui, "Start a new group", AccessibleRole::Button).await.single_click(PointerEventButton::Left).await;
         let field = ElementHandle::find_by_element_type_name(&ui, "LineEdit").next().expect("a name field");
         let input = field

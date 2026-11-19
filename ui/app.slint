@@ -127,6 +127,8 @@ component MenuEntry {
 }
 
 component Sidebar inherits Rectangle {
+    // Phones show one pane at a time, so the group pane carries the first steps.
+    in property <bool> narrow;
     callback open-chat(string);
     callback start-group();
     callback pending();
@@ -173,6 +175,18 @@ component Sidebar inherits Rectangle {
             spacing: Theme.s3;
             alignment: start;
             Hint { text: "No groups yet. Start one, or ask a member of a group for a way in."; }
+            if root.narrow: Button {
+                text: "Create or join a group";
+                icon: @image-url("icons/plus.svg");
+                has-icon: true;
+                primary: true;
+                activated => { root.start-group(); }
+            }
+        }
+        if root.narrow && AppState.chats.length > 0: VerticalLayout {
+            padding: Theme.s4;
+            padding-bottom: 0;
+            Hint { text: "Select a group to start."; }
         }
 
         ListView {
@@ -232,7 +246,7 @@ component Sidebar inherits Rectangle {
             VerticalLayout {
                 padding: Theme.s1;
                 MenuEntry {
-                    text: "Start or join a group";
+                    text: "Create or join a group";
                     icon: @image-url("icons/plus.svg");
                     activated => { root.start-group(); menu.close(); }
                 }
@@ -842,6 +856,12 @@ component Conversation inherits Rectangle {
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.divider; }
         }
 
+        if AppState.current-joined && AppState.current-members == 0: VerticalLayout {
+            padding: Theme.s4;
+            padding-bottom: 0;
+            Hint { text: "No one else is here yet. Ask someone for their code, then add it with the add-member icon above."; }
+        }
+
         if !AppState.current-joined: JoiningPanel {
             vertical-stretch: 1;
             cancel => { root.leave(); }
@@ -949,11 +969,17 @@ component Welcome inherits Rectangle {
             horizontal-alignment: center;
             wrap: word-wrap;
         }
-        HorizontalLayout {
+        if AppState.chats.length > 0: Text {
+            text: "Select a group to start.";
+            color: Theme.text;
+            font-size: Theme.fs-body;
+            horizontal-alignment: center;
+        }
+        if AppState.chats.length == 0: HorizontalLayout {
             alignment: center;
             spacing: Theme.s3;
             Button {
-                text: "Start or join a group";
+                text: "Create or join a group";
                 icon: @image-url("icons/plus.svg");
                 has-icon: true;
                 primary: true;
@@ -1066,13 +1092,13 @@ component StartDialog inherits Dialog {
     callback join-group();
     VerticalLayout {
         spacing: Theme.s2;
+        Hint { text: "To make a new group: you name it, then add people. Ask each for their code and add it."; }
         Button { text: "Start a new group"; primary: true; activated => { root.new-group(); } }
-        Hint { text: "You name it, then add people with their codes."; }
     }
     VerticalLayout {
         spacing: Theme.s2;
+        Hint { text: "To join a group: you'll get a code. Give it to someone already in the group; when they add it, you're in."; }
         Button { text: "Join someone's group"; activated => { root.join-group(); } }
-        Hint { text: "You get a code to give to someone already in it."; }
     }
 }
 
@@ -1533,6 +1559,7 @@ export component AppWindow inherits Window {
                 width: root.narrow ? area.width : 320px;
                 height: area.height;
                 visible: !root.narrow || !root.show-conversation;
+                narrow: root.narrow;
                 open-chat(id) => {
                     Actions.select-chat(id);
                     root.show-conversation = true;
@@ -1565,12 +1592,11 @@ export component AppWindow inherits Window {
                 clear => { root.overlay = Overlay.confirm-clear; }
                 leave => { root.overlay = Overlay.confirm-leave; }
             }
-            if AppState.current == "": Welcome {
+            if AppState.current == "" && !root.narrow: Welcome {
                 x: 321px;
                 y: 0;
                 width: area.width - 321px;
                 height: area.height;
-                visible: !root.narrow;
                 start-group => { root.overlay = Overlay.start; }
             }
 
@@ -1635,7 +1661,7 @@ export component AppWindow inherits Window {
             if root.overlay == Overlay.new-group: NameDialog {
                 title: "New group";
                 label: "Group name";
-                hint: "Only you see this name. Members name the group for themselves.";
+                hint: "Only you see this name. Then add people: ask each for their code and add it.";
                 action: "Create";
                 dismissed => { root.overlay = Overlay.none; }
                 submitted(v) => {

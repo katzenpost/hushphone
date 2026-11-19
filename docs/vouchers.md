@@ -18,7 +18,7 @@ already share. Never post it.
 
 ## The newcomer: get a voucher
 
-Open the **+** menu, choose **Start or join a group**, then **Join someone's group**. The name you give is yours alone; members name the
+Open the **+** menu, choose **Create or join a group**, then **Join someone's group**. The name you give is yours alone; members name the
 group for themselves.
 
 ![Start a group or join one](vouchers/start-dialog.png)
