@@ -23,7 +23,7 @@ path = "src/main.rs"
 slint = "=1.18.1"
 # pigeonhole_protocols #67: mesh writes at the mixnet box size (1549 bytes), so mesh and
 # mixnet clients reach each other through replicas that refuse smaller boxes.
-pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "6c87a34d5d40ae42e27faa8dcf5132b75f0f2d2b", features = ["reticulum-rs"] }
+pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "6c87a34d5d40ae42e27faa8dcf5132b75f0f2d2b" }
 # The same revision pigeonhole_protocols builds on (katzenpost/thin_client main: no persistent API and
 # so no SQLite, #105; the voucher form, #106), so that there is one ThinClient type; back to
 # crates.io once it is released.
@@ -54,7 +54,14 @@ rqrr = { version = "=0.11.0", default-features = false }
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 seccompiler = "0.5"
+
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# The Rust Reticulum, but not on OpenBSD: reticulum-ip-iface sets TCP keepalive's interval and
+# count, which OpenBSD has no per-socket options for.
+[target.'cfg(not(target_os = "openbsd"))'.dependencies]
+pigeonhole_protocols = { git = "https://github.com/katzenpost/pigeonhole_protocols", rev = "6c87a34d5d40ae42e27faa8dcf5132b75f0f2d2b", features = ["reticulum-rs"] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
 dirs = "7"
@@ -81,6 +88,11 @@ proptest = "1"
 # The APKs' version code less its ABI digit, which scripts/build-apk.sh checks against the
 # version above; F-Droid's update check reads it here.
 version-code = 10000306
+
+# cpal has no OpenBSD host, and its FreeBSD one drops recorded samples; cpal-bsd is cpal 0.17.3
+# with sndio's or OSS's as its default host there, for rustic_audio's cpal and ours alike.
+[patch.crates-io]
+cpal = { path = "cpal-bsd" }
 
 # One codegen unit: with several, LLVM names symbols after the build directory, and the
 # release would not be reproducible.

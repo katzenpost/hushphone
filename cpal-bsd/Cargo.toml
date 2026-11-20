@@ -1,0 +1,15 @@
+[package]
+name = "cpal"
+version = "0.17.3"
+edition = "2024"
+license = "AGPL-3.0-only"
+publish = false
+description = "cpal 0.17.3 as it is, with sndio's or OSS's as its default host on OpenBSD or FreeBSD"
+
+[dependencies]
+# cpal v0.17.3, the commit crates.io's 0.17.3 was packaged from: from git, since a crates.io
+# dependency on it would be patched to this crate too.
+upstream = { package = "cpal", git = "https://github.com/RustAudio/cpal", rev = "fd3b945bffcaa493fa7cb5ceddf9db1f9330fd30" }
+
+[target.'cfg(any(target_os = "openbsd", target_os = "freebsd"))'.dependencies]
+upstream = { package = "cpal", git = "https://github.com/RustAudio/cpal", rev = "fd3b945bffcaa493fa7cb5ceddf9db1f9330fd30", features = ["custom"] }

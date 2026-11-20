@@ -385,6 +385,7 @@ fn wire(ui: &AppWindow) {
                     s.set_screen_security(secure);
                 });
                 let now = match &app.setup.source {
+                    #[cfg(not(target_os = "openbsd"))]
                     Source::Mesh(a, _) => Some(a.as_str()),
                     _ => None,
                 };

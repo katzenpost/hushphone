@@ -35,6 +35,15 @@ cargo run --release
 
 The status bar reads "kpclientd is on the mixnet" once the daemon has reached a gateway.
 
+## FreeBSD, HardenedBSD and OpenBSD
+
+As on Linux, with `pkg install rust pkgconf alsa-lib` (ALSA only to build: sound goes through
+OSS) or `pkg_add rust`, and on OpenBSD `sysctl kern.audio.record=1` for the microphone; OpenBSD
+builds have no `--transport reticulum`. The BSDs have no abstract sockets, so set kpclientd's
+`[Listen.Unix]` `Address` to a path such as `"/tmp/katzenpost.sock"` and run hushphone with
+`--daemon /tmp/katzenpost.sock`. On HardenedBSD, whose PaX stops Mesa's JIT, run it with
+`SLINT_BACKEND=winit-software`.
+
 ## Transports
 
 `--transport` picks how hushphone reaches Pigeonhole. The groups, the protocol and the window are
