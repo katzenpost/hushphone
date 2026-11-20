@@ -1,6 +1,6 @@
 [package]
 name = "hushphone"
-version = "0.3.6"
+version = "0.3.7"
 edition = "2024"
 rust-version = "1.89"
 license = "AGPL-3.0-only"
@@ -87,7 +87,7 @@ proptest = "1"
 [package.metadata.android]
 # The APKs' version code less its ABI digit, which scripts/build-apk.sh checks against the
 # version above; F-Droid's update check reads it here.
-version-code = 10000306
+version-code = 10000307
 
 # cpal has no OpenBSD host, and its FreeBSD one drops recorded samples; cpal-bsd is cpal 0.17.3
 # with sndio's or OSS's as its default host there, for rustic_audio's cpal and ours alike.

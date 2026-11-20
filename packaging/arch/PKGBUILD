@@ -10,8 +10,9 @@ license=('AGPL-3.0-only')
 depends=('alsa-lib' 'fontconfig' 'gcc-libs' 'glibc' 'hicolor-icon-theme' 'libglvnd' 'libx11' 'libxcursor' 'libxi'
          'libxkbcommon' 'libxkbcommon-x11' 'wayland')
 makedepends=('cargo' 'pkgconf')
+# No debug package: its debug info takes the build past 6 GB of memory.
 # makepkg's -flto turns highctidh's C objects into GCC bitcode that rustc's lld cannot link.
-options=('!lto')
+options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('e322a722aa312282357a6a19357ae29b5437c255bb4d553f780f3a3ac61b8c9c')
 
