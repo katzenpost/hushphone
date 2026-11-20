@@ -295,6 +295,66 @@ mod tests {
         }
     }
 
+    /// A voucher through the real speaker and microphone, the one looped back into the other,
+    /// as in the BSD VMs whose sound card's output qemu feeds back into its input.
+    #[test]
+    #[ignore = "needs the speaker looped back into the microphone"]
+    fn round_trip_through_the_sound_card() {
+        let v: [u8; 32] = rand::random();
+        let stop = AtomicBool::new(false);
+        let heard = std::thread::scope(|s| {
+            let ear = s.spawn(|| listen(&UserIntent::for_test(), &stop));
+            std::thread::sleep(Duration::from_millis(500));
+            send(&UserIntent::for_test(), &v).unwrap();
+            ear.join().unwrap()
+        });
+        assert_eq!(heard, Ok(Some(v)));
+        println!("heard back voucher {}", check(&v));
+    }
+
+    /// Push to talk the same way: records a 700 Hz tone off the loop, then plays the clip while
+    /// the microphone listens, and hears mostly 700 Hz. A voucher would not do: Opus at 12 kb/s
+    /// leaves too little of its tones to decode.
+    #[test]
+    #[ignore = "needs the speaker looped back into the microphone"]
+    fn talk_round_trip_through_the_sound_card() {
+        let (intent, dir) = (UserIntent::for_test(), tempfile::tempdir().unwrap());
+        let mut voice = crate::voice::Voice::new(dir.path().into());
+        voice.start(&intent).unwrap();
+        out(|fs| Ok((0..fs * 2).map(|i| 0.25 * (std::f32::consts::TAU * 700.0 * i as f32 / fs as f32).sin()).collect())).unwrap();
+        // What is still on its way round the loop.
+        std::thread::sleep(Duration::from_secs(1));
+        let (tx, rx) = std::sync::mpsc::channel();
+        voice.stop(move |c| tx.send(c).unwrap());
+        let clip = rx.recv().unwrap().unwrap().expect("a clip");
+
+        let dev = cpal::default_host().default_input_device().unwrap();
+        let cfg = dev.default_input_config().unwrap();
+        let heard = Arc::new(Mutex::new(Vec::new()));
+        let mic = super::hear::<f32>(&dev, &cfg.config(), heard.clone()).unwrap();
+        mic.play().unwrap();
+        voice.play("chat", 0, zeroize::Zeroizing::new(clip.audio.bytes().to_vec())).unwrap();
+        std::thread::sleep(Duration::from_secs(4));
+        drop(mic);
+        // Goertzel, over blocks wide enough in frequency that a loop a little off rate still hits.
+        let (x, fs) = (heard.lock().unwrap(), cfg.sample_rate() as f32);
+        let db = |f: f32| {
+            let c = 2.0 * (std::f32::consts::TAU * f / fs).cos();
+            let p: f32 = x
+                .chunks(1024)
+                .map(|b| {
+                    let (s1, s2) = b.iter().fold((0f32, 0f32), |(s1, s2), &v| (v + c * s1 - s2, s1));
+                    s1 * s1 + s2 * s2 - c * s1 * s2
+                })
+                .sum();
+            10.0 * p.max(f32::MIN_POSITIVE).log10()
+        };
+        let (tone, below, above) = (db(700.0), db(450.0), db(1100.0));
+        let secs = clip.audio.duration_seconds();
+        assert!(tone > below.max(above) + 20.0, "a {secs:.1} s clip; heard 700 Hz at {tone:.0} dB, 450 Hz at {below:.0}, 1100 Hz at {above:.0}");
+        println!("recorded a {secs:.1} s clip, and heard it back: 700 Hz {:.0} dB over 450 Hz, {:.0} dB over 1100 Hz", tone - below, tone - above);
+    }
+
     #[test]
     fn ping_sounds_read_and_resample() {
         for w in [crate::ping::SENT, crate::ping::RECEIVED] {

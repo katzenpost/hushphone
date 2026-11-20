@@ -26,6 +26,15 @@ const USAGE: &str = "usage: hushphone [--transport mixnet|reticulum|reticulum-py
 fn main() {
     #[cfg(target_os = "linux")]
     hushphone::harden::process();
+    // Slint finds no system fonts on OpenBSD (fontique has no backend for it): X's, unless told.
+    #[cfg(target_os = "openbsd")]
+    if std::env::var_os("SLINT_FONT_PATH").is_none() && std::env::var_os("SLINT_DEFAULT_FONT").is_none() {
+        // SAFETY: nothing else runs yet to read the environment.
+        unsafe {
+            std::env::set_var("SLINT_DEFAULT_FONT", "/usr/X11R6/lib/X11/fonts/TTF/DejaVuSans.ttf");
+            std::env::set_var("SLINT_FONT_PATH", "/usr/X11R6/lib/X11/fonts/TTF");
+        }
+    }
     let mut daemon = None;
     let mut source = None;
     let mut data = None;
@@ -93,10 +102,13 @@ fn main() {
         std::process::exit(2)
     }
     let mesh = match transport.as_str() {
+        #[cfg(not(target_os = "openbsd"))]
         "reticulum" => {
             let r = replica.expect("checked");
             hushphone::mesh::host_port(&r).map(|_| Some(Source::Mesh(r.clone(), box_size)))
         }
+        #[cfg(target_os = "openbsd")]
+        "reticulum" => Err("this hushphone was built without the Rust Reticulum, which does not build on OpenBSD; use the mixnet".into()),
         "reticulum-py" => python_source(replica, rns_config, box_size, &data_dir).map(Some),
         _ => Ok(None),
     };

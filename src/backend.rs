@@ -34,6 +34,7 @@ pub enum Source {
     Memory(World),
     /// A Reticulum mesh in pure Rust: a replica's Reticulum TCP interface, `host:port`,
     /// and the box size.
+    #[cfg(not(target_os = "openbsd"))]
     Mesh(String, usize),
     /// A Reticulum mesh through the Python RNS, embedded: the Reticulum config directory and the
     /// box size.
@@ -44,6 +45,7 @@ pub enum Source {
 impl Source {
     pub fn is_mesh(&self) -> bool {
         match self {
+            #[cfg(not(target_os = "openbsd"))]
             Source::Mesh(..) => true,
             #[cfg(feature = "reticulum-py")]
             Source::MeshPy(..) => true,
@@ -264,6 +266,7 @@ async fn run(p: Params, mut rx: mpsc::UnboundedReceiver<Cmd>, tell: impl Fn(Upda
             tell(Update::Link(Link::Online));
             serve(cfg(), Remote { socket: s.clone() }, None, &att, &mut rx, &tell).await;
         }
+        #[cfg(not(target_os = "openbsd"))]
         Source::Mesh(addr, box_size) => {
             use pigeonhole_protocols::transport::reticulum_rs::ReticulumRsBackend;
             tell(Update::Link(Link::Connecting));
@@ -430,9 +433,11 @@ enum Served {
     Stopped,
 }
 
+#[cfg(any(not(target_os = "openbsd"), feature = "reticulum-py"))]
 const MESH_WAIT: Duration = Duration::from_secs(90);
 
 /// Serves over a mesh transport that `b` is, or reports why it is not.
+#[cfg(any(not(target_os = "openbsd"), feature = "reticulum-py"))]
 async fn mesh<B: Backend>(
     b: Result<B, impl std::fmt::Display>,
     cfg: Config,

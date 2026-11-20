@@ -107,7 +107,7 @@ pub fn pick_file(_: &UserIntent, dir: &Path, name: &str) -> Result<Picked, Strin
     let path = under(&dir.join(SEND), name)?;
     let mut o = std::fs::OpenOptions::new();
     o.read(true);
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
         o.custom_flags(libc::O_NOFOLLOW);
