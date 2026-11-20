@@ -1,0 +1,3 @@
+* Linux: an Arch package on each release, and a Nix flake and PKGBUILD to build one.
+* FreeBSD, HardenedBSD and OpenBSD: sound, and what they need to build and run.
+* Android: an F-Droid listing.

@@ -1,3 +1,11 @@
+hushphone (0.3.7) unstable; urgency=medium
+
+  * Linux: an Arch package on each release, and a Nix flake and PKGBUILD to build one.
+  * FreeBSD, HardenedBSD and OpenBSD: sound, and what they need to build and run.
+  * Android: an F-Droid listing.
+
+ -- Katzenpost <packages@katzenpost.network>  Fri, 20 Nov 2026 08:32:32 +0000
+
 hushphone (0.3.6) unstable; urgency=medium
 
   * A removed member disappears from the Members dialog at once.

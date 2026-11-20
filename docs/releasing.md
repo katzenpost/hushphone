@@ -6,7 +6,7 @@
 2. Open a pull request "Release X.Y.Z" and merge it.
 3. On main: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
 4. The tag runs `.github/workflows/release.yml`: it tests, builds the Linux binary, the APKs
-   and the debs twice each, checks the builds match, and publishes them with `SHA256SUMS` as
+   and the debs twice each and the Arch package once, checks the builds match, and publishes them with `SHA256SUMS` as
    a GitHub release. Check the release page.
 
 Tag only after step 2: the workflow checks that the top `debian/changelog` entry names the

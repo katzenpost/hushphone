@@ -2,7 +2,7 @@ name: Release
 
 # A tag v* runs the tests, then builds the Linux binary and the Android APK twice each, on
 # different runners in different directories, checks that both builds are byte for byte the
-# same, builds the Debian packages twice each the same way, and publishes them all as a GitHub
+# same, builds the Debian packages twice each the same way and the Arch package once, and publishes them all as a GitHub
 # release. A pull request that changes the release build,
 # or a run by hand from the Actions tab, does all of this except publishing.
 #
@@ -19,6 +19,7 @@ on:
       - .github/workflows/release.yml
       - scripts/**
       - Makefile
+      - packaging/arch/**
       - rust-toolchain.toml
   workflow_dispatch:
 
@@ -110,8 +111,33 @@ jobs:
           name: deb-${{ matrix.distro }}
           path: out/*
 
+  # x86_64 only: Arch has no official arm64 image. It builds this checkout, not the tag's
+  # tarball on GitHub, and a tag sets pkgver, so the PKGBUILD needs no bump to release.
+  arch:
+    needs: test
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      # makepkg refuses to run as root.
+      - name: Build
+        shell: bash
+        run: |
+          cd packaging/arch
+          [ "$VERSION" = test ] || sed -i "s/^pkgver=.*/pkgver=${VERSION#v}/" PKGBUILD
+          . ./PKGBUILD && pacman -S --noconfirm --needed "${depends[@]}" "${makedepends[@]}"
+          git -C ../.. archive --prefix=hushphone-$pkgver/ -o $PWD/hushphone-$pkgver.tar.gz HEAD
+          useradd -m builder && chown -R builder .
+          su builder -c "makepkg --noconfirm --skipchecksums"
+          mkdir ../../out && cp hushphone-$pkgver-*.pkg.tar.zst ../../out/hushphone-$VERSION-arch-x86_64.pkg.tar.zst
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: arch
+          path: out/*
+
   compare:
-    needs: [linux, android, deb]
+    needs: [linux, android, deb, arch]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
@@ -127,7 +153,7 @@ jobs:
             diff <(entries $apk) <(entries android-1/${apk#*/})
           done
           [ "$VERSION" = test ] || diff -r android-0 android-1
-          mkdir release && cp linux-0/* android-0/* deb-*/* release/
+          mkdir release && cp linux-0/* android-0/* deb-*/* arch/* release/
           cd release && sha256sum hushphone-* > SHA256SUMS
       - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
