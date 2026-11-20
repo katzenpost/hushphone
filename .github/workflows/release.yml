@@ -124,6 +124,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          git config --global --add safe.directory "$PWD"
           cd packaging/arch
           [ "$VERSION" = test ] || sed -i "s/^pkgver=.*/pkgver=${VERSION#v}/" PKGBUILD
           . ./PKGBUILD && pacman -S --noconfirm --needed "${depends[@]}" "${makedepends[@]}"
